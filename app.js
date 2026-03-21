@@ -287,7 +287,9 @@ function confirmNewCart(){
   if(nome&&sconto)setClienteSconto(nome,sconto);
   var id='cart_'+Date.now();
   carrelli.push({id:id,nome:nome||('Cliente '+(carrelli.length+1)),
-    createdAt:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),items:[],
+    createdAt:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),
+    dataCreazione:Date.now(),
+    items:[],
     scontoGlobale:sconto||null});
   activeCartId=id;
   saveCarrelli();
@@ -922,7 +924,35 @@ function renderCartTabs(){
   var body = document.getElementById('cart-body');
   if(!bar || !body) return;
 
-  // ── TAB PILLS ────────────────────────────────────────────────────────────
+  // ── RIGA ORDINI+CLIENTI: separata sopra le pillole ───────────────────────
+  // Assicura che #ct-ordfor-row esista — lo inserisce prima di #cart-tabs-bar
+  if(!document.getElementById('ct-ordfor-row')){
+    var ordRow = document.createElement('div');
+    ordRow.id = 'ct-ordfor-row';
+    bar.parentNode.insertBefore(ordRow, bar);
+  }
+  var ordRow = document.getElementById('ct-ordfor-row');
+  if(ordRow){
+    var nClienti = carrelli.length;
+    ordRow.innerHTML =
+      '<button id="ct-btn-clienti" onclick="ctApriClienti()" title="Elenco clienti">' +
+        '👥 CLIENTI' + (nClienti ? ' <span class="ct-pill-n">' + nClienti + '</span>' : '') +
+      '</button>' +
+      '<button id="ct-btn-ordfor" onclick="goTab(\'t-ordfor\');renderOrdFor()" title="Ordini per fornitore">📦 ORDINI</button>';
+  }
+
+  // ── DROPDOWN CLIENTI (per giorno) — iniettato una volta sola ─────────────
+  if(!document.getElementById('ct-clienti-dropdown')){
+    var dd = document.createElement('div');
+    dd.id = 'ct-clienti-dropdown';
+    dd.innerHTML =
+      '<div id="ct-clienti-backdrop" onclick="ctChiudiClienti()"></div>' +
+      '<div id="ct-clienti-panel"><h3>👥 Clienti</h3><div id="ct-clienti-list"></div>' +
+      '<button class="ct-clienti-close" onclick="ctChiudiClienti()">✕ Chiudi</button></div>';
+    document.body.appendChild(dd);
+  }
+
+  // ── TAB PILLS (solo nomi clienti, scroll laterale) ────────────────────────
   var tabsHtml = '<button class="ct-pill ct-pill--new" onclick="newCart()">＋ NUOVO</button>';
   carrelli.forEach(function(cart, ci){
     var active  = cart.id === activeCartId;
@@ -939,8 +969,6 @@ function renderCartTabs(){
     pill.addEventListener('dblclick', function(e){ e.stopPropagation(); rinominaCart(ci); });
     tabsHtml += pill.outerHTML;
   });
-  // Aggiunge il tasto ORDINI inline nel tab-bar (non fixed, non fuori layout)
-  tabsHtml += '<button id="ct-btn-ordfor" onclick="goTab(\'t-ordfor\');renderOrdFor()" title="Ordini per fornitore">📦 ORDINI</button>';
   bar.innerHTML = tabsHtml;
   // Ri-attacca eventi dopo innerHTML
   bar.querySelectorAll('.ct-pill:not(.ct-pill--new)').forEach(function(p, ci){
@@ -6308,3 +6336,75 @@ document.addEventListener('click', function(e){
 
 // Render iniziale
 setTimeout(function(){ CT.render(); }, 350);
+
+// ══════════════════════════════════════════════════════════════════
+//  CLIENTI DROPDOWN — Menu a tendina raggruppato per giorno
+//  Funzioni: ctApriClienti, ctChiudiClienti, ctRenderClientiList
+// ══════════════════════════════════════════════════════════════════
+
+// Giorni della settimana in italiano (0=Dom, 1=Lun, ...)
+var _gg = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+
+function ctApriClienti(){
+  var dd = document.getElementById('ct-clienti-dropdown');
+  if(!dd) return;
+  ctRenderClientiList();
+  dd.classList.add('open');
+}
+
+function ctChiudiClienti(){
+  var dd = document.getElementById('ct-clienti-dropdown');
+  if(dd) dd.classList.remove('open');
+}
+
+function ctRenderClientiList(){
+  var list = document.getElementById('ct-clienti-list');
+  if(!list) return;
+
+  if(!carrelli.length){
+    list.innerHTML = '<div style="text-align:center;color:#555;padding:20px;font-size:13px;">Nessun cliente.<br>Premi ＋ NUOVO per iniziare.</div>';
+    return;
+  }
+
+  // Raggruppa per giorno in base a cart.data (timestamp creazione)
+  // Se non c'è data, usa "Altro"
+  var byDay = {};
+  carrelli.forEach(function(cart, ci){
+    var label = 'Altro';
+    if(cart.dataCreazione){
+      var d = new Date(cart.dataCreazione);
+      var oggi = new Date();
+      var diff = Math.floor((oggi - d) / 86400000); // giorni fa
+      if(diff === 0) label = 'Oggi — ' + _gg[d.getDay()];
+      else if(diff === 1) label = 'Ieri — ' + _gg[d.getDay()];
+      else if(diff < 7) label = _gg[d.getDay()] + ' (' + diff + ' gg fa)';
+      else label = d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'});
+    }
+    if(!byDay[label]) byDay[label] = [];
+    byDay[label].push({ cart: cart, ci: ci });
+  });
+
+  var h = '';
+  Object.keys(byDay).forEach(function(day){
+    h += '<div class="ct-clienti-day">' + esc(day) + '</div>';
+    byDay[day].forEach(function(item){
+      var cart = item.cart;
+      var ci   = item.ci;
+      var n    = (cart.items||[]).length;
+      var isActive = cart.id === activeCartId;
+      var stato = cart.stato === 'inviato' ? '✅ ' : cart.stato === 'modifica' ? '✏️ ' : '';
+      h += '<button class="ct-clienti-btn' + (isActive ? ' active' : '') + '" ' +
+           'onclick="ctSelezionaCliente(' + ci + ')">' +
+           '<span>' + stato + esc(cart.nome || '—') + '</span>' +
+           (n ? '<span class="ct-clienti-n">' + n + ' art.</span>' : '') +
+           '</button>';
+    });
+  });
+
+  list.innerHTML = h;
+}
+
+function ctSelezionaCliente(ci){
+  switchCart(ci);
+  ctChiudiClienti();
+}

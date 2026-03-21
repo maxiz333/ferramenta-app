@@ -2098,3 +2098,255 @@ button[touch-action="manipulation"],
   flex-wrap: nowrap !important;
 }
 #cart-tabs-bar::-webkit-scrollbar { display: none !important; }
+
+/* ══════════════════════════════════════════════════════════════════
+   PATCH LAYOUT v2 — Fix allineamento testata, responsività, codici
+   Autore: Claude | Sovrascrive regole conflittuali precedenti
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── 1. WRAPPER CARRELLO: tutto dentro max-width centrato ──────── */
+#tc .panel { padding: 0 !important; background: var(--ct-bg) !important; }
+
+/* ── 2. TESTA CARRELLO: barra con 2 righe separate ────────────── */
+/* Riga A: tasto ORDINI (fisso sopra le pillole) */
+#ct-ordfor-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 10px 4px;
+  background: var(--ct-bg);
+  border-bottom: 1px solid var(--ct-border);
+  position: sticky;
+  top: 56px; /* sotto l'app-header */
+  z-index: 102;
+  flex-wrap: wrap;
+}
+
+/* Tasto CLIENTI — apre dropdown */
+#ct-btn-clienti {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 20px; border: none;
+  background: var(--ct-yellow); color: #111;
+  font-size: 13px; font-weight: 900; letter-spacing: .4px;
+  cursor: pointer; touch-action: manipulation;
+  box-shadow: 0 2px 10px rgba(255,215,0,.3);
+  min-height: 38px;
+}
+#ct-btn-clienti:active { filter: brightness(.88); }
+
+/* Tasto ORDINI — blu piatto */
+#ct-btn-ordfor {
+  display: inline-flex !important; align-items: center !important; gap: 6px !important;
+  padding: 8px 14px !important; border-radius: 20px !important;
+  border: 2px solid var(--ct-yellow) !important;
+  background: transparent !important; color: var(--ct-yellow) !important;
+  font-size: 12px !important; font-weight: 900 !important; letter-spacing: .4px !important;
+  cursor: pointer !important; touch-action: manipulation !important;
+  min-height: 38px !important; white-space: nowrap !important;
+}
+#ct-btn-ordfor:active { background: rgba(255,215,0,.1) !important; }
+
+/* ── 3. BARRA PILLOLE CLIENTI: scroll orizzontale puro ────────── */
+/* Sovrascrive TUTTE le definizioni precedenti con !important finale */
+#cart-tabs-bar {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;          /* NO wrap — scroll laterale */
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 6px 10px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important;
+  background: var(--ct-bg) !important;
+  border-bottom: 1px solid var(--ct-border) !important;
+  position: sticky !important;
+  top: calc(56px + 52px) !important;    /* sotto app-header + riga ORDINI */
+  z-index: 101 !important;
+  max-width: 100vw !important;
+  box-sizing: border-box !important;
+}
+#cart-tabs-bar::-webkit-scrollbar { display: none !important; }
+
+/* Pillole: non si restringono mai */
+#cart-tabs-bar .ct-pill,
+#cart-tabs-bar .cart-tab-pill {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+}
+
+/* ── 4. DROPDOWN CLIENTI ──────────────────────────────────────── */
+#ct-clienti-dropdown {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 1200;
+  display: none;
+}
+#ct-clienti-dropdown.open { display: block; }
+
+#ct-clienti-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,.6);
+}
+#ct-clienti-panel {
+  position: absolute;
+  top: 108px; /* sotto app-header + barra ORDINI */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 96%; max-width: 420px;
+  background: #1a1b1d;
+  border: 1px solid var(--ct-border);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.7);
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 14px 12px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+#ct-clienti-panel h3 {
+  font-size: 15px; font-weight: 900; color: var(--ct-yellow);
+  margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--ct-border);
+}
+.ct-clienti-day {
+  font-size: 10px; font-weight: 700; color: var(--ct-muted);
+  text-transform: uppercase; letter-spacing: .8px;
+  margin: 10px 0 4px; padding: 0 2px;
+}
+.ct-clienti-btn {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid transparent; background: transparent;
+  color: var(--ct-text); font-size: 13px; font-weight: 600;
+  cursor: pointer; text-align: left; touch-action: manipulation;
+  margin-bottom: 4px; transition: background .12s;
+}
+.ct-clienti-btn:hover,
+.ct-clienti-btn:active { background: #252628; border-color: var(--ct-border); }
+.ct-clienti-btn.active { background: rgba(255,215,0,.1); border-color: rgba(255,215,0,.4); color: var(--ct-yellow); }
+.ct-clienti-btn .ct-clienti-n {
+  background: rgba(255,215,0,.15); color: var(--ct-yellow);
+  border-radius: 8px; padding: 2px 7px; font-size: 10px; font-weight: 700;
+}
+.ct-clienti-close {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; padding: 10px; margin-top: 10px;
+  border-radius: 10px; border: 1px solid var(--ct-border);
+  background: transparent; color: var(--ct-muted); font-size: 13px;
+  cursor: pointer; touch-action: manipulation;
+}
+
+/* ── 5. NOME PRODOTTO: va a capo, leggibile ────────────────────── */
+.ct-nome {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--ct-text) !important;
+  white-space: normal !important;      /* SEMPRE a capo — niente ellipsis */
+  overflow: visible !important;
+  text-overflow: unset !important;
+  word-break: break-word !important;
+  display: block !important;
+  width: 100% !important;
+  line-height: 1.35 !important;
+  cursor: pointer !important;
+}
+
+/* ── 6. CODICI: grandi, centrati, leggibili ────────────────────── */
+.ct-codes {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 4px 8px !important;
+  margin-top: 5px !important;
+  justify-content: flex-start !important;
+}
+.ct-code {
+  font-size: 13px !important;
+  color: var(--ct-muted) !important;
+  font-family: monospace !important;
+  white-space: nowrap !important;
+}
+.ct-code b {
+  color: var(--ct-yellow) !important;
+  font-weight: 800 !important;
+  font-size: 14px !important;
+}
+.ct-code--mag b {
+  color: var(--ct-yellow) !important;
+  font-size: 14px !important;
+}
+/* Input Cod.Fornitore editabile — stile migliorato */
+.ct-codf-inp {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: #fc8181 !important;        /* rosso chiaro = fornitore */
+  font-family: monospace !important;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px dashed #fc818155 !important;
+  width: auto !important;
+  min-width: 60px !important;
+  max-width: 120px !important;
+  padding: 0 2px !important;
+  outline: none !important;
+}
+.ct-codf-inp:focus {
+  border-bottom-color: #fc8181 !important;
+  background: rgba(252,129,129,.06) !important;
+}
+
+/* ── 7. STICKY FOOTER: garantisce left:0 right:0 su iPhone ─────── */
+/* Rimuoviamo il translateX(-50%) su PC che causa slittamento */
+#cart-pos-footer {
+  position: fixed !important;
+  bottom: 58px !important;
+  left: 0 !important;
+  right: 0 !important;
+  transform: none !important;         /* NIENTE translateX */
+  z-index: 200 !important;
+  background: linear-gradient(135deg, #0d0d00, #111200) !important;
+  border-top: 2px solid var(--ct-yellow) !important;
+  overflow: hidden !important;
+  box-shadow: 0 -3px 16px rgba(255,215,0,.15) !important;
+  padding: 0 !important;
+}
+/* Su PC: il contenuto .ct-footer si centra da solo */
+.ct-footer {
+  max-width: 760px !important;
+  width: 95% !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 6px !important;
+  padding: 5px 12px !important;
+  height: 56px !important;
+  box-sizing: border-box !important;
+}
+/* Override PC: no translateX */
+@media (min-width: 601px) {
+  #cart-pos-footer {
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+  }
+}
+
+/* ── 8. BODY CARRELLO: padding bottom sufficiente ──────────────── */
+#cart-body {
+  padding-bottom: 130px !important;
+}
+@media (min-width: 601px) {
+  #cart-body     { max-width: 760px !important; margin: 0 auto !important; padding: 8px 12px 200px !important; }
+}
+
+/* ── 9. APP-HEADER: non esce mai dai bordi ─────────────────────── */
+.app-header {
+  max-width: 100vw !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
