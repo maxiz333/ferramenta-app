@@ -1637,6 +1637,12 @@ function ctSaveForniColore(map){
 }
 
 // renderOrdFor: renderizza la tab Ordini Fornitore raggruppati per colore
+var _ordForColorFilter=null;
+function ordForFilterColor(col){
+  _ordForColorFilter=(_ordForColorFilter===col)?null:col;
+  renderOrdFor();
+}
+
 function renderOrdFor(){
   var wrap = document.getElementById('t-ordfor-body');
   if(!wrap) return;
@@ -1667,7 +1673,26 @@ function renderOrdFor(){
   }
 
   var h = '';
+
+  // Barra filtri colore
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">';
   Object.keys(byColor).forEach(function(col){
+    var nome=forniMap[col]||colorNames[col]||col;
+    var isOn=(_ordForColorFilter===col);
+    h+='<button onclick="ordForFilterColor(\''+col+'\')" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:14px;border:2px solid '+(isOn?col:'#333')+';background:'+(isOn?col+'22':'transparent')+';color:'+(isOn?col:'#888')+';font-size:11px;font-weight:800;cursor:pointer;">';
+    h+='<span style="width:10px;height:10px;border-radius:50%;background:'+col+';display:inline-block;"></span>';
+    h+=esc(nome)+' ('+byColor[col].length+')';
+    h+='</button>';
+  });
+  h+='</div>';
+
+  // Filtra per colore se attivo
+  var coloriDaMostrare=Object.keys(byColor);
+  if(_ordForColorFilter && byColor[_ordForColorFilter]){
+    coloriDaMostrare=[_ordForColorFilter];
+  }
+
+  coloriDaMostrare.forEach(function(col){
     var items     = byColor[col];
     var colLabel  = colorNames[col] || col;
     var fornNome  = forniMap[col] || '';
@@ -2227,6 +2252,14 @@ function chiudiEditOrdine(){document.getElementById('edit-ord-overlay').style.di
 
 // --- ORDINI ---------------------------------------------------
 function filterOrdini(f){
+  // Se siamo nella vista "da ordinare", chiuderla
+  if(_daOrdView){
+    _daOrdView=false;
+    var dbtn=document.getElementById('ord-f-daordinare');
+    if(dbtn){dbtn.style.background='transparent';dbtn.style.color='#fc8181';}
+    var listEl=document.getElementById('ord-list');if(listEl)listEl.style.display='';
+    var daoEl=document.getElementById('ord-daordinare-view');if(daoEl)daoEl.style.display='none';
+  }
   ordFiltro=f;
   ['nuovo','lavorazione','pronto','completato','tutti'].forEach(function(x){
     var btn=document.getElementById('ord-f-'+x);if(!btn)return;
@@ -2255,6 +2288,124 @@ function clearOrdiniCompletati(){
   });
 }
 
+// --- VISTA "DA ORDINARE" — raccoglie tutti gli articoli daOrdinare da carrelli + ordini ---
+var _daOrdView=false;
+
+function toggleDaOrdinareView(){
+  _daOrdView=!_daOrdView;
+  var btn=document.getElementById('ord-f-daordinare');
+  var listEl=document.getElementById('ord-list');
+  var daoEl=document.getElementById('ord-daordinare-view');
+  if(!daoEl)return;
+  if(_daOrdView){
+    if(btn){btn.style.background='#e53e3e';btn.style.color='#fff';}
+    if(listEl)listEl.style.display='none';
+    daoEl.style.display='block';
+    _daOrdColorFilter=null;
+    renderDaOrdinareView();
+  } else {
+    if(btn){btn.style.background='transparent';btn.style.color='#fc8181';}
+    if(listEl)listEl.style.display='';
+    daoEl.style.display='none';
+  }
+}
+
+// Filtro colore per vista "da ordinare" nella tab ordini
+var _daOrdColorFilter=null;
+function daOrdFilterColor(col){
+  _daOrdColorFilter=(_daOrdColorFilter===col)?null:col;
+  renderDaOrdinareView();
+}
+
+function renderDaOrdinareView(){
+  var wrap=document.getElementById('ord-daordinare-view');
+  if(!wrap)return;
+
+  // Raccoglie articoli da ordinare SOLO dai carrelli attivi — identico a renderOrdFor
+  var byColor={};
+  carrelli.forEach(function(cart){
+    (cart.items||[]).forEach(function(it){
+      if(!it.daOrdinare) return;
+      if(!it._ordColore || it._ordColore==='#888888') return;
+      var col=it._ordColore;
+      if(!byColor[col]) byColor[col]=[];
+      byColor[col].push({ it:it, cartNome:cart.nome||'' });
+    });
+  });
+
+  var forniMap=ctGetForniColore();
+  var colorNames={'#e53e3e':'Rosso','#38a169':'Verde','#3182ce':'Blu','#e2c400':'Giallo','#888888':'Senza colore'};
+
+  if(!Object.keys(byColor).length){
+    wrap.innerHTML='<div style="text-align:center;padding:40px;color:#555">'+
+      'Nessun articolo da ordinare.<br><small>Usa il tasto ORDINA nelle card del carrello.</small></div>';
+    return;
+  }
+
+  var h='';
+
+  // Barra filtri colore
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">';
+  h+='<span style="font-size:13px;font-weight:900;color:var(--text);">🚚 Da ordinare</span>';
+  Object.keys(byColor).forEach(function(col){
+    var nome=forniMap[col]||colorNames[col]||col;
+    var isOn=(_daOrdColorFilter===col);
+    h+='<button onclick="daOrdFilterColor(\''+col+'\')" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:14px;border:2px solid '+(isOn?col:'#333')+';background:'+(isOn?col+'22':'transparent')+';color:'+(isOn?col:'#888')+';font-size:11px;font-weight:800;cursor:pointer;">';
+    h+='<span style="width:10px;height:10px;border-radius:50%;background:'+col+';display:inline-block;"></span>';
+    h+=esc(nome)+' ('+byColor[col].length+')';
+    h+='</button>';
+  });
+  h+='</div>';
+
+  // Filtra per colore se attivo
+  var coloriDaMostrare=Object.keys(byColor);
+  if(_daOrdColorFilter && byColor[_daOrdColorFilter]){
+    coloriDaMostrare=[_daOrdColorFilter];
+  }
+
+  coloriDaMostrare.forEach(function(col){
+    var items=byColor[col];
+    var colLabel=colorNames[col]||col;
+    var fornNome=forniMap[col]||'';
+
+    h+='<div class="cof-group" style="border-color:'+col+'55">';
+    h+='<div class="cof-header" style="border-color:'+col+'">';
+    h+='<span class="cof-dot" style="background:'+col+'"></span>';
+    h+='<span class="cof-color-label">'+colLabel+'</span>';
+    h+='<input class="cof-forn-inp" value="'+esc(fornNome)+'" placeholder="Nome fornitore..." '+
+       'oninput="ctSaveFornNome(\''+col+'\',this.value)" onkeydown="if(event.key===\'Enter\')this.blur()">';
+    h+='<span class="cof-count">'+items.length+' art.</span>';
+    h+='</div>';
+
+    items.forEach(function(entry){
+      var it=entry.it;
+      var codM=it.codM?(String(it.codM).match(/^\d+$/)?String(it.codM).padStart(7,'0'):it.codM):'';
+      var sub=(parsePriceIT(it.prezzoUnit)*(parseFloat(it.qty)||0)).toFixed(2);
+      h+='<div class="cof-row">';
+      if(it.foto) h+='<img class="cof-thumb" src="'+it.foto+'" alt="" onclick="apriModalFoto(this.src)">';
+      else h+='<div class="cof-thumb cof-thumb--empty">📦</div>';
+      h+='<div class="cof-info">';
+      h+='<div class="cof-nome">'+esc(it.desc||'—')+'</div>';
+      h+='<div class="cof-meta">';
+      if(codM) h+='<span>Cod.Mag: <b>'+esc(codM)+'</b></span> ';
+      if(it.codF) h+='<span>Cod.Forn: <b>'+esc(it.codF)+'</b></span> ';
+      h+='<span>Cart: <b>'+esc(entry.cartNome)+'</b></span>';
+      h+='</div>';
+      if(it.nota) h+='<div class="cof-nota">📝 '+esc(it.nota)+'</div>';
+      h+='</div>';
+      h+='<div class="cof-right">';
+      h+='<div class="cof-qty">'+(parseFloat(it.qty)||0)+' '+(it.unit||'pz')+'</div>';
+      h+='<div class="cof-sub">€'+sub+'</div>';
+      h+='</div>';
+      h+='</div>';
+    });
+
+    h+='</div>';
+  });
+
+  wrap.innerHTML=h;
+}
+
 // [SECTION: ORDINI] --------------------------------------------------------
 //  Render lista ordini, filtri, dettaglio ordine, vista cassa
 function renderOrdini(){
@@ -2274,26 +2425,26 @@ function renderOrdini(){
   filtered.sort(function(a,b){return(b.createdAt||'').localeCompare(a.createdAt||'');});
 
   if(!filtered.length){
-    list.innerHTML='<div style="text-align:center;padding:60px 20px;color:#444;"><div style="font-size:40px;margin-bottom:8px;">-</div>'+(searchLow?'Nessun risultato':'Nessun ordine')+'</div>';
+    list.innerHTML='<div style="text-align:center;padding:60px 20px;color:#444;"><div style="font-size:40px;margin-bottom:8px;">📋</div>'+(searchLow?'Nessun risultato':'Nessun ordine')+'</div>';
     return;
   }
 
   var SC={nuovo:'#f5c400',lavorazione:'#3182ce',pronto:'#dd6b20',completato:'#38a169'};
-  var SI={nuovo:'-',lavorazione:'-',pronto:'-',completato:'-'};
-  var SL={nuovo:'Nuovo',lavorazione:'In corso',pronto:'Pronto',completato:'Fatto'};
+  var SL={nuovo:'NUOVO',lavorazione:'IN CORSO',pronto:'PRONTO',completato:'COMPLETATO'};
+  var SBG={nuovo:'#f5c400',lavorazione:'#3182ce',pronto:'#dd6b20',completato:'#38a169'};
 
   // Raggruppa per data
   var gruppi={},gruppiOrd=[];
   filtered.forEach(function(o){
-    var dk=o.data||'-';
+    var dk=o.data||'—';
     var iso=o.createdAt||'';
     if(iso){
       var d=new Date(iso),oggi=new Date();oggi.setHours(0,0,0,0);
       var ieri=new Date(oggi);ieri.setDate(ieri.getDate()-1);
       var dD=new Date(d);dD.setHours(0,0,0,0);
-      if(dD.getTime()===oggi.getTime())dk='Oggi';
-      else if(dD.getTime()===ieri.getTime())dk='Ieri';
-      else dk=d.toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'});
+      if(dD.getTime()===oggi.getTime())dk='OGGI';
+      else if(dD.getTime()===ieri.getTime())dk='IERI';
+      else dk=d.toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'}).toUpperCase();
     }
     if(!gruppi[dk]){gruppi[dk]=[];gruppiOrd.push(dk);}
     gruppi[dk].push(o);
@@ -2301,14 +2452,14 @@ function renderOrdini(){
 
   var h='';
   gruppiOrd.forEach(function(dk){
-    // Separatore data — più visibile
-    h+='<div style="font-size:11px;font-weight:800;color:#666;text-transform:uppercase;letter-spacing:1.5px;padding:16px 2px 8px;display:flex;align-items:center;gap:8px;">';
-    h+='<span style="flex:1;height:1px;background:#2a2a2a;display:block;"></span>';
-    h+='<span>'+esc(dk)+'</span>';
-    h+='<span style="flex:1;height:1px;background:#2a2a2a;display:block;"></span>';
+    // ── SEPARATORE DATA — banda piena ──
+    h+='<div class="ord-date-sep">';
+    h+='<span class="ord-date-line"></span>';
+    h+='<span class="ord-date-label">📅 '+esc(dk)+'</span>';
+    h+='<span class="ord-date-line"></span>';
     h+='</div>';
 
-    gruppi[dk].forEach(function(ord){
+    gruppi[dk].forEach(function(ord,idxInGroup){
       var gi=ordini.indexOf(ord);
       var ost=ord.stato;
       var sc=SC[ost]||'#555';
@@ -2316,74 +2467,97 @@ function renderOrdini(){
       var tot=0;
       (ord.items||[]).forEach(function(it){tot+=parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0);});
 
-      // ── CARD ────────────────────────────────────────────────────────────────
-      h+='<div style="background:#1c1c1c;border-radius:14px;margin-bottom:10px;overflow:hidden;border:1px solid #2a2a2a;border-left:5px solid '+sc+';box-shadow:0 2px 8px rgba(0,0,0,.3);">';
+      // ── CARD ORDINE — blocco massiccio con bordo colorato top ──
+      h+='<div class="ord-card" style="border-top:4px solid '+sc+';">';
 
-      // ── HEADER: cliente + numero ordine ─────────────────────────────────────
-      h+='<div style="padding:14px 14px 10px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
-      h+='<div style="flex:1;min-width:0;">';
-      h+='<div style="font-size:18px;font-weight:900;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(ord.nomeCliente||'—')+'</div>';
-      h+='<div style="font-size:12px;color:#666;margin-top:3px;display:flex;align-items:center;gap:6px;">';
-      if(ord.numero) h+='<span style="background:#2a2a2a;color:var(--accent);font-size:11px;font-weight:800;padding:1px 7px;border-radius:6px;">#'+ord.numero+'</span>';
+      // ── HEADER: banda colorata con stato ──
+      h+='<div class="ord-card-stato" style="background:'+sc+';color:'+(ost==='nuovo'?'#111':'#fff')+'">';
+      h+=SL[ost];
+      if(ord.numero) h+=' — #'+ord.numero;
+      h+='</div>';
+
+      // ── CLIENTE + DATA ──
+      h+='<div class="ord-card-cliente">';
+      h+='<div class="ord-cliente-nome">'+esc(ord.nomeCliente||'—')+'</div>';
+      h+='<div class="ord-cliente-meta">';
       h+=esc(ord.data||'')+(ord.ora?' · '+ord.ora:'');
-      h+='</div></div>';
-      // Stato + totale a destra
-      h+='<div style="text-align:right;flex-shrink:0;">';
-      h+='<div style="display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:800;background:'+sc+'22;color:'+sc+';border:1px solid '+sc+'55;">'+SL[ost]+'</div>';
-      h+='<div style="font-size:24px;font-weight:900;color:var(--accent);line-height:1.1;margin-top:5px;">€'+tot.toFixed(2)+'</div>';
-      h+='<div style="font-size:11px;color:#555;">'+nArt+' art.</div>';
-      h+='</div></div>';
+      h+=' · '+nArt+' articol'+(nArt===1?'o':'i');
+      h+='</div>';
+      h+='</div>';
 
-      // ── NOTA ORDINE ──────────────────────────────────────────────────────────
+      // ── NOTA ORDINE ──
       if(ord.nota){
-        h+='<div style="margin:0 12px 10px;padding:8px 12px;background:#2a1800;border-left:3px solid #f6ad55;border-radius:6px;font-size:12px;color:#f6ad55;font-weight:600;">📝 '+esc(ord.nota)+'</div>';
+        h+='<div class="ord-nota">📝 '+esc(ord.nota)+'</div>';
       }
 
-      // ── LISTA ARTICOLI ───────────────────────────────────────────────────────
-      h+='<div style="padding:0 14px 10px;">';
-      (ord.items||[]).forEach(function(it){
+      // ── GRIGLIA ARTICOLI — header ──
+      h+='<div class="ord-items-wrap">';
+      h+='<div class="ord-grid ord-grid-head">';
+      h+='<div class="ord-gh">Prodotto</div>';
+      h+='<div class="ord-gh ord-gh-c">Qtà</div>';
+      h+='<div class="ord-gh ord-gh-c">Prezzo</div>';
+      h+='<div class="ord-gh ord-gh-c">Tot</div>';
+      h+='</div>';
+
+      (ord.items||[]).forEach(function(it,ii){
         var pu=parsePriceIT(it.prezzoUnit);
         var q=parseFloat(it.qty||0);
         var sub=(pu*q).toFixed(2);
-        h+='<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #242424;">';
-        // Quantità badge
-        h+='<span style="background:#2e2e2e;color:var(--accent);font-size:13px;font-weight:900;padding:4px 8px;border-radius:6px;flex-shrink:0;min-width:32px;text-align:center;">'+q+'</span>';
-        // Descrizione
-        h+='<div style="flex:1;min-width:0;">';
-        h+='<div style="font-size:14px;font-weight:700;color:#e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(it.desc||'')+'</div>';
-        var meta='';
-        if(it.codM) meta+='<span style="color:var(--accent);font-size:10px;font-weight:700;">'+esc(it.codM)+'</span> ';
-        if(it.codF) meta+='<span style="color:#fc8181;font-size:10px;font-weight:700;">'+esc(it.codF)+'</span>';
-        if(meta) h+='<div style="margin-top:1px;">'+meta+'</div>';
-        if(it.nota) h+='<div style="font-size:11px;color:#f6ad55;margin-top:2px;">📝 '+esc(it.nota)+'</div>';
-        if(it.daOrdinare) h+='<div style="font-size:10px;color:#fc8181;font-weight:800;margin-top:1px;">🚚 DA ORDINARE</div>';
+
+        h+='<div class="ord-grid ord-grid-row'+(ii%2===0?' ord-grid-even':' ord-grid-odd')+'">';
+
+        // Colonna prodotto: nome + codici sotto
+        h+='<div class="ord-gc-desc">';
+        h+='<div class="ord-item-name">'+esc(it.desc||'—')+'</div>';
+        var codes='';
+        if(it.codM) codes+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
+        if(it.codF) codes+='<span class="ord-code-forn">'+esc(it.codF)+'</span>';
+        if(codes) h+='<div class="ord-item-codes">'+codes+'</div>';
+        if(it.nota) h+='<div class="ord-item-nota">📝 '+esc(it.nota)+'</div>';
+        if(it.daOrdinare) h+='<div class="ord-item-daord">🚚 DA ORDINARE</div>';
         h+='</div>';
+
+        // Quantità
+        h+='<div class="ord-gc-qty">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
+
+        // Prezzo unitario
+        h+='<div class="ord-gc-price">€'+pu.toFixed(2)+'</div>';
+
         // Subtotale
-        h+='<span style="font-size:14px;font-weight:900;color:var(--accent);flex-shrink:0;">€'+sub+'</span>';
+        h+='<div class="ord-gc-sub">€'+sub+'</div>';
+
         h+='</div>';
       });
+
       h+='</div>';
 
-      // ── BARRA AZIONI MOBILE-FIRST ────────────────────────────────────────────
-      // Riga 1: bottoni principali grandi (min 48px, pollice-friendly)
-      h+='<div style="padding:10px 12px 6px;display:flex;gap:8px;">';
+      // ── TOTALE ORDINE — grande e visibile ──
+      h+='<div class="ord-total-bar">';
+      h+='<span class="ord-total-label">TOTALE</span>';
+      h+='<span class="ord-total-value">€ '+tot.toFixed(2)+'</span>';
+      h+='</div>';
+
+      // ── AZIONI — due righe wrap ──
+      h+='<div class="ord-actions">';
       if(ost!=='completato'){
-        h+='<button onclick="setStatoOrdine('+gi+',\'completato\')" style="flex:1;min-height:48px;border-radius:12px;border:none;background:#38a169;color:#fff;font-size:16px;font-weight:900;cursor:pointer;touch-action:manipulation;display:flex;align-items:center;justify-content:center;gap:6px;">✅ Fatto</button>';
+        h+='<button onclick="setStatoOrdine('+gi+',\'completato\')" class="ord-abtn ord-abtn--done">✅ Fatto</button>';
       } else {
-        h+='<button onclick="setStatoOrdine('+gi+',\'nuovo\')" style="flex:1;min-height:48px;border-radius:12px;border:2px solid #f5c40055;background:rgba(245,196,0,.08);color:#f5c400;font-size:14px;font-weight:800;cursor:pointer;touch-action:manipulation;">↩️ Riapri</button>';
+        h+='<button onclick="setStatoOrdine('+gi+',\'nuovo\')" class="ord-abtn ord-abtn--reopen">↩️ Riapri</button>';
       }
-      h+='<button onclick="openCassa('+gi+')" style="flex:1;min-height:48px;border-radius:12px;border:2px solid var(--accent)44;background:rgba(245,196,0,.08);color:var(--accent);font-size:14px;font-weight:800;cursor:pointer;touch-action:manipulation;">💰 Cassa</button>';
+      h+='<button onclick="openCassa('+gi+')" class="ord-abtn ord-abtn--cassa">💰 Cassa</button>';
       h+='</div>';
-      // Riga 2: azioni secondarie più piccole ma ancora touch-friendly
-      h+='<div style="padding:0 12px 10px;display:flex;gap:6px;flex-wrap:wrap;">';
-      h+='<button onclick="modificaOrdineDaTab('+gi+')" style="flex:1;min-height:40px;border-radius:10px;border:1px solid #805ad544;background:transparent;color:#b794f4;font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation;">✏️ Modifica</button>';
-      h+='<button onclick="stampaRicevuta(ordini['+gi+'].items,ordini['+gi+'].nomeCliente,ordini['+gi+'].totale,ordini['+gi+'].nota)" style="min-height:40px;padding:0 14px;border-radius:10px;border:1px solid #33333388;background:transparent;color:#666;font-size:13px;cursor:pointer;touch-action:manipulation;">🖨️</button>';
-      if(ost!=='lavorazione') h+='<button onclick="setStatoOrdine('+gi+',\'lavorazione\')" style="min-height:40px;padding:0 12px;border-radius:10px;border:1px solid #3182ce44;background:transparent;color:#63b3ed;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;">⏳</button>';
-      if(ost!=='pronto') h+='<button onclick="setStatoOrdine('+gi+',\'pronto\')" style="min-height:40px;padding:0 12px;border-radius:10px;border:1px solid #dd6b2044;background:transparent;color:#f6ad55;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;">📦</button>';
-      h+='<button onclick="deleteOrdine('+gi+')" style="min-height:40px;padding:0 12px;border-radius:10px;border:1px solid #e53e3e33;background:transparent;color:#e53e3e88;font-size:12px;cursor:pointer;touch-action:manipulation;margin-left:auto;">🗑️</button>';
+      h+='<div class="ord-actions ord-actions-sec">';
+      h+='<button onclick="modificaOrdineDaTab('+gi+')" class="ord-abtn ord-abtn--edit">✏️ Modifica</button>';
+      h+='<button onclick="stampaRicevuta(ordini['+gi+'].items,ordini['+gi+'].nomeCliente,ordini['+gi+'].totale,ordini['+gi+'].nota)" class="ord-abtn ord-abtn--print">🖨️ Stampa</button>';
+      if(ost!=='lavorazione') h+='<button onclick="setStatoOrdine('+gi+',\'lavorazione\')" class="ord-abtn ord-abtn--wip">⏳ In corso</button>';
+      if(ost!=='pronto') h+='<button onclick="setStatoOrdine('+gi+',\'pronto\')" class="ord-abtn ord-abtn--ready">📦 Pronto</button>';
+      h+='<button onclick="deleteOrdine('+gi+')" class="ord-abtn ord-abtn--del">🗑️ Elimina</button>';
       h+='</div>';
 
-      h+='</div>'; // fine card
+      h+='</div>'; // fine ord-card
+
+      // ── SPACER tra ordini — grande, con linea decorativa ──
+      h+='<div class="ord-spacer"><div class="ord-spacer-line"></div></div>';
     });
   });
 
