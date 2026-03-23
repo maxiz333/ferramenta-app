@@ -955,7 +955,20 @@ body.light-mode #confirm-overlay > div { background:#fff; }
 <!-- TAB CARRELLO -->
 <div id="tc" class="tab-content">
 <div class="panel" style="padding:0;background:var(--ct-bg,#121212);">
-  <div id="cart-tabs-bar" style="padding:8px 10px 4px;"></div>
+  <!-- Testata carrello: 3 righe fisse centrate max 600px -->
+  <div id="ct-header-wrap">
+    <!-- Riga 1: ORDINI centrato -->
+    <div id="ct-row-ordini" class="ct-header-row ct-header-row--ordini">
+      <button id="ct-btn-ordfor" onclick="goTab('t-ordfor');renderOrdFor()">📦 ORDINI FORNITORE</button>
+    </div>
+    <!-- Riga 2: CLIENTI + NUOVO -->
+    <div id="ct-row-azioni" class="ct-header-row ct-header-row--azioni">
+      <button id="ct-btn-clienti" onclick="ctApriClienti()">👥 CLIENTI</button>
+      <button class="ct-pill ct-pill--new" onclick="newCart()">＋ NUOVO</button>
+    </div>
+    <!-- Riga 3: pillole nomi clienti (scroll laterale) -->
+    <div id="cart-tabs-bar" class="ct-header-row ct-header-row--pills"></div>
+  </div>
   <div id="cart-body"></div>
 </div>
 </div>

@@ -913,73 +913,90 @@ function getStoricoCliente(nomeCliente){
 // --- RENDER CARRELLO ---------------------------------------
 
 // =============================================================================
-//  renderCartTabs — RIGENERATA COMPLETAMENTE
-//  Design: Dark #121212, Giallo #FFD700 (ferramenta)
-//  Responsive: PC max 760px | Mobile full-width, touch 44px
-//  Funzioni: foto popup, U.M. select, forbici dblclick, colore ordine,
-//             dblclick protezione su CONFERMA, riepilogo intatto
+//  renderCartTabs — RISCRITTURA DEFINITIVA v3
+//  Layout testata: 3 righe fisse centrate max 600px
+//  Riga 1: [📦 ORDINI — centrato]
+//  Riga 2: [👥 CLIENTI▾]  [＋ NUOVO]
+//  Riga 3: pillole nomi clienti (scroll laterale, mai trabocca)
+//  Card: nome a capo | codici 14px | prezzo blu/verde | qty interi
 // =============================================================================
 function renderCartTabs(){
   var bar  = document.getElementById('cart-tabs-bar');
   var body = document.getElementById('cart-body');
   if(!bar || !body) return;
 
-  // ── RIGA ORDINI+CLIENTI: separata sopra le pillole ───────────────────────
-  // Assicura che #ct-ordfor-row esista — lo inserisce prima di #cart-tabs-bar
-  if(!document.getElementById('ct-ordfor-row')){
-    var ordRow = document.createElement('div');
-    ordRow.id = 'ct-ordfor-row';
-    bar.parentNode.insertBefore(ordRow, bar);
-  }
-  var ordRow = document.getElementById('ct-ordfor-row');
-  if(ordRow){
-    var nClienti = carrelli.length;
-    ordRow.innerHTML =
-      '<button id="ct-btn-clienti" onclick="ctApriClienti()" title="Elenco clienti">' +
-        '👥 CLIENTI' + (nClienti ? ' <span class="ct-pill-n">' + nClienti + '</span>' : '') +
-      '</button>' +
-      '<button id="ct-btn-ordfor" onclick="goTab(\'t-ordfor\');renderOrdFor()" title="Ordini per fornitore">📦 ORDINI</button>';
+  // ── TESTATA: 3 righe separate nel wrapper ─────────────────────────────────
+  // Cerca o crea il wrapper testata (#ct-header-wrap) prima di #cart-tabs-bar
+  var wrap = document.getElementById('ct-header-wrap');
+  if(!wrap){
+    wrap = document.createElement('div');
+    wrap.id = 'ct-header-wrap';
+    bar.parentNode.insertBefore(wrap, bar);
   }
 
-  // ── DROPDOWN CLIENTI (per giorno) — iniettato una volta sola ─────────────
+  // Riga 1: ORDINI centrato
+  var row1 = document.getElementById('ct-row-ordini');
+  if(!row1){ row1 = document.createElement('div'); row1.id = 'ct-row-ordini'; row1.className = 'ct-header-row ct-header-row--ordini'; wrap.appendChild(row1); }
+  row1.innerHTML =
+    '<button id="ct-btn-ordfor" onclick="goTab(\'t-ordfor\');renderOrdFor()" title="Ordini per fornitore">📦 ORDINI FORNITORE</button>';
+
+  // Riga 2: CLIENTI + NUOVO
+  var row2 = document.getElementById('ct-row-azioni');
+  if(!row2){ row2 = document.createElement('div'); row2.id = 'ct-row-azioni'; row2.className = 'ct-header-row ct-header-row--azioni'; wrap.appendChild(row2); }
+  var nCl = carrelli.length;
+  row2.innerHTML =
+    '<button id="ct-btn-clienti" onclick="ctApriClienti()" title="Scegli cliente">' +
+      '👥 CLIENTI' + (nCl ? ' <span class="ct-pill-n">' + nCl + '</span>' : '') +
+    '</button>' +
+    '<button class="ct-pill ct-pill--new" onclick="newCart()">＋ NUOVO</button>';
+
+  // Riga 3: pillole nomi (scroll laterale)
+  // Le pillole vivono nel bar originale — lo sposto dentro il wrapper
+  if(bar.parentNode !== wrap){ wrap.appendChild(bar); }
+  bar.className = 'ct-header-row ct-header-row--pills';
+  // Svuota inline style che potrebbe bloccare il layout
+  bar.removeAttribute('style');
+
+  // Popola pillole
+  var pillsHtml = '';
+  carrelli.forEach(function(cart, ci){
+    var active = cart.id === activeCartId;
+    var n      = (cart.items||[]).length;
+    var isInv  = cart.stato === 'inviato';
+    var isMod  = cart.stato === 'modifica';
+    var icon   = isInv ? '✅ ' : isMod ? '✏️ ' : '';
+    var cls    = 'ct-pill' + (active ? ' active' : '') + (isMod ? ' ct-pill--mod' : '');
+    pillsHtml +=
+      '<button class="' + cls + '" ' +
+        'onclick="switchCart(' + ci + ')" ' +
+        'ondblclick="event.stopPropagation();rinominaCart(' + ci + ')">' +
+        icon + esc(cart.nome) +
+        (n ? '<span class="ct-pill-n">' + n + '</span>' : '') +
+      '</button>';
+  });
+  bar.innerHTML = pillsHtml;
+
+  // ── DROPDOWN CLIENTI (creato una sola volta nel body) ─────────────────────
   if(!document.getElementById('ct-clienti-dropdown')){
     var dd = document.createElement('div');
-    dd.id = 'ct-clienti-dropdown';
+    dd.id  = 'ct-clienti-dropdown';
     dd.innerHTML =
       '<div id="ct-clienti-backdrop" onclick="ctChiudiClienti()"></div>' +
-      '<div id="ct-clienti-panel"><h3>👥 Clienti</h3><div id="ct-clienti-list"></div>' +
-      '<button class="ct-clienti-close" onclick="ctChiudiClienti()">✕ Chiudi</button></div>';
+      '<div id="ct-clienti-panel">' +
+        '<h3>👥 Clienti</h3>' +
+        '<div id="ct-clienti-list"></div>' +
+        '<button class="ct-clienti-close" onclick="ctChiudiClienti()">✕ Chiudi</button>' +
+      '</div>';
     document.body.appendChild(dd);
   }
 
-  // ── TAB PILLS (solo nomi clienti, scroll laterale) ────────────────────────
-  var tabsHtml = '<button class="ct-pill ct-pill--new" onclick="newCart()">＋ NUOVO</button>';
-  carrelli.forEach(function(cart, ci){
-    var active  = cart.id === activeCartId;
-    var n       = (cart.items||[]).length;
-    var isInv   = cart.stato === 'inviato';
-    var isMod   = cart.stato === 'modifica';
-    var pill    = document.createElement('button');
-    pill.className = 'ct-pill' + (active ? ' active' : '') + (isMod ? ' ct-pill--mod' : '');
-    pill.dataset.tipo = cart.tipo || '';
-    var icon = isInv ? '✅ ' : isMod ? '✏️ ' : '';
-    pill.innerHTML = icon + esc(cart.nome) +
-      (n ? '<span class="ct-pill-n">' + n + '</span>' : '');
-    pill.addEventListener('click', function(){ switchCart(ci); });
-    pill.addEventListener('dblclick', function(e){ e.stopPropagation(); rinominaCart(ci); });
-    tabsHtml += pill.outerHTML;
-  });
-  bar.innerHTML = tabsHtml;
-  // Ri-attacca eventi dopo innerHTML
-  bar.querySelectorAll('.ct-pill:not(.ct-pill--new)').forEach(function(p, ci){
-    p.addEventListener('click', function(){ switchCart(ci); });
-    p.addEventListener('dblclick', function(e){ e.stopPropagation(); rinominaCart(ci); });
-  });
-
   // ── CORPO VUOTO ───────────────────────────────────────────────────────────
   if(!activeCartId || !carrelli.length){
-    body.innerHTML = '<div class="ct-empty"><div class="ct-empty-icon">🛒</div>' +
-      '<p>Premi <b style="color:#FFD700">＋ NUOVO</b> per iniziare</p></div>';
+    body.innerHTML =
+      '<div class="ct-empty">' +
+        '<div class="ct-empty-icon">🛒</div>' +
+        '<p>Premi <b style="color:#FFD700">＋ NUOVO</b> per iniziare</p>' +
+      '</div>';
     return;
   }
   var cart = carrelli.find(function(c){ return c.id === activeCartId; });
@@ -1018,7 +1035,7 @@ function renderCartTabs(){
     return;
   }
 
-  // ── BANNER MODIFICA con bordo cantiere giallo/nero ────────────────────────
+  // ── BANNER MODIFICA ───────────────────────────────────────────────────────
   if(cart.stato === 'modifica'){
     h += '<div class="ct-banner-mod">';
     h += '<span style="font-size:18px">✏️</span>';
@@ -1031,12 +1048,12 @@ function renderCartTabs(){
   h += '<div id="cart-action-btns">';
   h += '<button class="ct-btn-cerca" onclick="openCodeNumpad()">';
   h += '<span class="ct-btn-icon">🔍</span><span>CERCA PER CODICE</span></button></div>';
-  h += '<div style="padding:0 10px 6px">';
+  h += '<div id="cart-search-wrap">';
   h += '<input type="text" id="cart-search" placeholder="🔎 Cerca per nome, specifiche..." ';
   h += 'style="width:100%;padding:10px 14px;border:1px solid #2e3033;border-radius:10px;font-size:13px;background:#1e1e1e;color:#f0f0f0;box-sizing:border-box" ';
   h += 'oninput="renderCartSearch()" autocomplete="off">';
   h += '</div>';
-  h += '<div id="cart-search-results" style="padding:0 10px"></div>';
+  h += '<div id="cart-search-results" style="padding:0 8px"></div>';
 
   // ── LISTA VUOTA ───────────────────────────────────────────────────────────
   if(!(cart.items||[]).length){
@@ -1047,9 +1064,7 @@ function renderCartTabs(){
   } else {
 
     // ── TOTALE STICKY ─────────────────────────────────────────────────────
-    var tot = (cart.items||[]).reduce(function(s,it){
-      return s + parsePriceIT(it.prezzoUnit) * parseFloat(it.qty||0);
-    }, 0);
+    var tot     = (cart.items||[]).reduce(function(s,it){ return s + parsePriceIT(it.prezzoUnit) * parseFloat(it.qty||0); }, 0);
     var scontoGl = cart.scontoGlobale;
     var totFin   = scontoGl ? tot * (1 - scontoGl/100) : tot;
     h += '<div class="ct-sticky-total">';
@@ -1059,78 +1074,72 @@ function renderCartTabs(){
     h += '<button onclick="openScontoOverlay()" class="ct-btn-sconto">% Sconto</button>';
     h += '</div>';
 
-    // ══════════════════════════════════════════════════════════════════════
-    //  CARD ARTICOLI — flex-row compatta + icon-bar + pannelli a comparsa
-    // ══════════════════════════════════════════════════════════════════════
+    // ── CARD ARTICOLI ──────────────────────────────────────────────────────
     (cart.items||[]).forEach(function(it, idx){
-      var p       = parsePriceIT(it.prezzoUnit);
-      var q       = parseFloat(it.qty) || 0;
-      var sub     = (p * q).toFixed(2);
-      var isSc    = it.scampolo    || false;
-      var isFR    = it.fineRotolo  || false;
-      var isDaOrd = it.daOrdinare  || false;
-      var scagAp  = it._scaglioniAperti || false;
-      var scagAtt = it._scaglioneAttivo || null;
-      var hasNota = !!(it.nota && it.nota.trim());
-      var scOn    = isSc || isFR;
+      var p            = parsePriceIT(it.prezzoUnit);
+      var q            = parseFloat(it.qty) || 0;
+      var sub          = (p * q).toFixed(2);
+      var isSc         = it.scampolo    || false;
+      var isFR         = it.fineRotolo  || false;
+      var isDaOrd      = it.daOrdinare  || false;
+      var scagAp       = it._scaglioniAperti || false;
+      var scagAtt      = it._scaglioneAttivo || null;
+      var hasNota      = !!(it.nota && it.nota.trim());
+      var scOn         = isSc || isFR;
       var isTuttoRotolo = it._tuttoRotolo || false;
 
-      // Cod. Magazzino 7 cifre
+      // Cod. Magazzino — 7 cifre se numerico
       var codM7 = it.codM
         ? (String(it.codM).match(/^\d+$/) ? String(it.codM).padStart(7,'0') : it.codM)
         : '';
       var codF = it.codF || '';
 
-      // Bordo card: colore ordine | stato modifica | rotolo intero
-      var cardBorder = '';
-      if(isTuttoRotolo) cardBorder = 'border-color:#e53e3e;box-shadow:0 0 0 1px #e53e3e55';
-      else if(it._ordColore) cardBorder = 'border-color:' + it._ordColore + ';box-shadow:0 0 0 1px ' + it._ordColore + '44';
+      // Bordo card
+      var cardStyle = '';
+      if(isTuttoRotolo)    cardStyle = 'border-color:#e53e3e;box-shadow:0 0 0 2px #e53e3e55';
+      else if(it._ordColore) cardStyle = 'border-color:' + it._ordColore + ';box-shadow:0 0 0 1px ' + it._ordColore + '44';
 
-      // Card con classe modifica per bordo cantiere
       var cardClass = 'ct-card' +
         (it._checked ? ' ct-card--checked' : '') +
         (cart.stato === 'modifica' ? ' ct-card--mod' : '');
 
       h += '<div class="' + cardClass + '" id="cart-row-' + idx + '"' +
-           (cardBorder ? ' style="' + cardBorder + '"' : '') + '>';
+           (cardStyle ? ' style="' + cardStyle + '"' : '') + '>';
 
-      // ── RIGA PRINCIPALE: layout responsive 2 righe su mobile ──────────────
-      // Riga A (sempre): foto | info(nome+codici) | prezzo
-      // Riga B (sotto):  stepper qty | UM select
+      // ── RIGA A: foto | info(nome+codici) | prezzo ─────────────────────────
       h += '<div class="ct-row">';
 
-      // Foto interattiva — onclick apriModalFoto
+      // Miniatura
       if(it.foto){
-        h += '<img class="ct-thumb" src="' + it.foto + '" alt="" ' +
-             'onclick="apriModalFoto(this.src)" title="Clicca per ingrandire">';
+        h += '<img class="ct-thumb" src="' + it.foto + '" alt="" onclick="apriModalFoto(this.src)">';
       } else {
         h += '<div class="ct-thumb ct-thumb--empty">📦</div>';
       }
 
-      // Info: nome + riga codici (Cod.Mag | Cod.Forn)
+      // Info: nome COMPLETO (sempre a capo) + codici GRANDI affiancati
       h += '<div class="ct-info">';
-      h += '<div class="ct-nome" onclick="ctToggleNome(\'' + cart.id + '\',' + idx + ')" title="Tocca per leggere il nome completo">' + esc(it.desc || '—') + '</div>';
-      // Riga codici allineata orizzontalmente
-      if(codM7 || codF !== undefined){
-        h += '<div class="ct-codes">';
-        // Cod. Magazzino — statico (non editabile nella card)
-        if(codM7) h += '<span class="ct-code ct-code--mag">Cod.Mag: <b>' + esc(codM7) + '</b></span>';
-        if(codM7) h += '<span class="ct-code-sep">|</span>';
-        // Cod. Fornitore — input editabile direttamente nella card
-        h += '<span class="ct-code">Cod.Forn: <input class="ct-codf-inp" '
-           + 'value="' + esc(codF) + '" '
-           + 'placeholder="—" '
-           + 'title="Clicca per modificare il Codice Fornitore" '
-           + 'oninput="ctSetCodF(\'' + cart.id + '\',' + idx + ',this.value)" '
-           + 'onclick="event.stopPropagation();this.select()" '
-           + 'onkeydown="if(event.key===\'Enter\')this.blur()"\'>';
-        h += '</span>';
-        h += '</div>';
+      // Nome — display:block, word-break:break-word — SEMPRE leggibile
+      h += '<div class="ct-nome">' + esc(it.desc || '—') + '</div>';
+      // Riga codici: 14px, Cod.Mag giallo | Cod.Forn rosso editabile
+      h += '<div class="ct-codes">';
+      if(codM7){
+        h += '<span class="ct-code ct-code--mag">Cod.Mag <b>' + esc(codM7) + '</b></span>';
+        h += '<span class="ct-code-sep">|</span>';
       }
+      h += '<span class="ct-code">Cod.Forn ';
+      h += '<input class="ct-codf-inp" ';
+      h += 'value="' + esc(codF) + '" ';
+      h += 'placeholder="—" ';
+      h += 'title="Clicca per modificare" ';
+      h += 'oninput="ctSetCodF(\'' + cart.id + '\',' + idx + ',this.value)" ';
+      h += 'onclick="event.stopPropagation();this.select()" ';
+      h += 'onkeydown="if(event.key===\'Enter\')this.blur()">';
+      h += '</span>';
+      h += '</div>'; // fine ct-codes
       h += '</div>'; // fine ct-info
 
-      // Prezzi: ORIGINALE in blu sbarrato, FINALE in verde, giallo se nessuno sconto
-      // id="prz-IDX" permette aggiornamento live da ctCalcolaLive()
+      // ── BLOCCO PREZZI: BLU sbarrato → VERDE finale ────────────────────────
+      // id="prz-IDX" — aggiornato in tempo reale da ctCalcolaLive()
       h += '<div class="ct-price-block" id="prz-' + idx + '">';
 
       var prezOrigNum = 0;
@@ -1145,33 +1154,34 @@ function renderCartTabs(){
       }
 
       if(hasSconto){
+        // BLU sbarrato = originale, VERDE grassetto = finale
         h += '<div class="ct-old--orig">€' + (prezOrigNum * q).toFixed(2) + '</div>';
         h += '<div class="ct-sub--final">€' + sub + '</div>';
       } else {
+        // Giallo standard (rosso se rotolo intero, arancio se fine rotolo)
         var subColor = isTuttoRotolo ? '#fc8181' : (isFR ? '#f6ad55' : '#FFD700');
         h += '<div class="ct-sub" style="color:' + subColor + '">€' + sub + '</div>';
       }
 
+      // Input €/unità (piccolo, editabile)
       h += '<input class="ct-punit" type="text" inputmode="decimal" value="' +
            esc(it.prezzoUnit||'0') + '" ' +
            'onchange="cartSetPrezzo(\'' + cart.id + '\',' + idx + ',this.value)" ' +
            'onclick="this.select()" title="€/unità">';
       h += '</div>'; // fine ct-price-block
 
-      h += '</div>'; // fine ct-row
+      h += '</div>'; // fine ct-row A
 
-      // ── RIGA B: stepper qty + selezione U.M. ─────────────────────────────
-      // Separata in riga propria: tasti grandi, facili su mobile
+      // ── RIGA B: stepper qty (INTERI) + U.M. ──────────────────────────────
       h += '<div class="ct-row-b">';
       h += '<div class="ct-qty">';
       h += '<button class="ct-qty-btn" onclick="cartDelta(\'' + cart.id + '\',' + idx + ',-1)">−</button>';
-      h += '<button class="ct-qty-val" onclick="openQtyNumpad(\'' + cart.id + '\',' + idx + ')">' + q + '</button>';
+      h += '<button class="ct-qty-val" onclick="openQtyNumpad(\'' + cart.id + '\',' + idx + ')">' + Math.round(q) + '</button>';
       h += '<button class="ct-qty-btn" onclick="cartDelta(\'' + cart.id + '\',' + idx + ',1)">＋</button>';
       h += '</div>';
-      var units = ['pz','mt','kg','lt','cf','ml','gr','mm','cm','m²','m³'];
+      var units   = ['pz','mt','kg','lt','cf','ml','gr','mm','cm','m²','m³'];
       var curUnit = it.unit || 'pz';
-      h += '<select class="ct-um-select" title="U.M." ' +
-           'onchange="cartSetUnit(\'' + cart.id + '\',' + idx + ',this.value)">';
+      h += '<select class="ct-um-select" title="U.M." onchange="cartSetUnit(\'' + cart.id + '\',' + idx + ',this.value)">';
       units.forEach(function(u){
         h += '<option value="' + u + '"' + (u === curUnit ? ' selected' : '') + '>' + u + '</option>';
       });
@@ -1179,20 +1189,13 @@ function renderCartTabs(){
       h += '<div class="ct-row-b-spacer"></div>';
       h += '</div>'; // fine ct-row-b
 
-      // ── ICON-BAR orizzontale ──────────────────────────────────────────────
-      // Icone SVG outline: Forbici (singolo = scampolo, DOPPIO = Tutto Rotolo),
-      // Percentuale (sconto/scaglioni), Note, Ordina, Cestino
+      // ── ICONBAR: Forbici | % | Note | Ordina | Cestino ───────────────────
       h += '<div class="ct-iconbar">';
 
-      // ──── FORBICI ─────────────────────────────────────────────────────────
-      // Singolo click: ciclo scampolo/fine-rotolo (logica originale)
-      // DOPPIO CLICK (dblclick): attiva "Tutto il Rotolo" — bordo rosso + nota automatica
-      // Il dblclick è distinto dal singolo: usa event.detail o timer separato
-      // FORBICI — un solo onclick gestisce singolo e doppio tap
-      // ctForbiciTap() conta i tap: 1 tap = scampolo, 2 tap rapidi = ROTOLO INTERO
-      // ondblclick rimosso: non affidabile su Safari/iPhone
-      var forbLbl = isTuttoRotolo ? 'ROTOLO' : (scOn ? (isFR?'ROTOLO':'SCAMPOLO') : '');
-      h += '<button class="ct-icon-btn' + (scOn||isTuttoRotolo ? ' ct-icon-btn--on' : '') +
+      // FORBICI — tap singolo: scampolo | doppio tap: ROTOLO INTERO (bordo rosso)
+      var forbLbl = isTuttoRotolo ? 'ROTOLO' : (scOn ? (isFR ? 'ROTOLO' : 'SCAMPOLO') : '');
+      h += '<button class="ct-icon-btn' +
+           (scOn||isTuttoRotolo ? ' ct-icon-btn--on' : '') +
            (isTuttoRotolo ? ' ct-icon-btn--rotolo' : '') + '" ' +
            'onclick="ctForbiciTap(\'' + cart.id + '\',' + idx + ')" ' +
            'title="Tap: scampolo | 2 tap rapidi: TUTTO IL ROTOLO">';
@@ -1203,17 +1206,15 @@ function renderCartTabs(){
            '<line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>';
       h += (forbLbl ? '<span>' + forbLbl + '</span>' : '') + '</button>';
 
-      // ──── SCONTO % ────────────────────────────────────────────────────────
+      // SCONTO %
       var hasScag = scagAp || scagAtt;
       h += '<button class="ct-icon-btn' + (hasScag ? ' ct-icon-btn--on' : '') + '" ' +
-           'onclick="ctTogglePanel(\'' + cart.id + '\',' + idx + ',\'sconto\')" ' +
-           'title="Sconto / Scaglioni">';
+           'onclick="ctTogglePanel(\'' + cart.id + '\',' + idx + ',\'sconto\')" title="Sconto / Scaglioni">';
       h += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
            '<line x1="19" y1="5" x2="5" y2="19"/>' +
-           '<circle cx="6.5" cy="6.5" r="2.5"/>' +
-           '<circle cx="17.5" cy="17.5" r="2.5"/></svg></button>';
+           '<circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></button>';
 
-      // ──── NOTE ────────────────────────────────────────────────────────────
+      // NOTE
       h += '<button class="ct-icon-btn' + (hasNota ? ' ct-icon-btn--on' : '') + '" ' +
            'onclick="ctTogglePanel(\'' + cart.id + '\',' + idx + ',\'nota\')" title="Nota">';
       h += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
@@ -1222,7 +1223,7 @@ function renderCartTabs(){
            '<line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>' +
            '<polyline points="10 9 9 9 8 9"/></svg></button>';
 
-      // ──── ORDINA (con colore) ──────────────────────────────────────────────
+      // ORDINA (con colore fornitore)
       var ordStyle = it._ordColore
         ? 'background:' + it._ordColore + '33;border-color:' + it._ordColore + ';color:' + it._ordColore
         : '';
@@ -1234,7 +1235,7 @@ function renderCartTabs(){
            '<path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>' +
            '<span>ORDINA</span></button>';
 
-      // ──── CESTINO ─────────────────────────────────────────────────────────
+      // CESTINO
       h += '<button class="ct-icon-btn ct-icon-btn--del" ' +
            'onclick="cartRemoveItem(\'' + cart.id + '\',' + idx + ')" title="Elimina">';
       h += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
@@ -1244,34 +1245,34 @@ function renderCartTabs(){
 
       h += '</div>'; // fine ct-iconbar
 
-      // ── PANNELLI A COMPARSA (display:none di default) ────────────────────
+      // ── PANNELLI A COMPARSA ───────────────────────────────────────────────
       var pScId = 'ctp-sc-' + idx;
       var pNoId = 'ctp-no-' + idx;
 
-      // Pannello Sconto / Scaglioni — calcolo LIVE con oninput
+      // Pannello SCONTO — input numerico con ricalcolo LIVE (oninput)
       h += '<div id="' + pScId + '" class="ct-panel" style="display:none">';
-      if(!hasScag || true){
-        var pBase4sc = it._prezzoOriginale || it._prezzoBase || it.prezzoUnit || '0';
-        var scAtt4sc = it._scontoApplicato || 0;
-        var fin4sc   = scAtt4sc > 0
-          ? (parsePriceIT(pBase4sc)*(1-scAtt4sc/100)*q).toFixed(2)
-          : (parsePriceIT(pBase4sc)*q).toFixed(2);
-        h += '<div class="ct-panel-row">';
-        h += '<label class="ct-pl">Sconto %</label>';
-        h += '<input type="number" min="0" max="100" value="' + scAtt4sc + '" ' +
-             'class="ct-pi" ' +
-             'oninput="ctCalcolaLive(this,' + idx + ',\'' + pBase4sc + '\',' + q + ')" ' +
-             'onchange="cartSetScontoScampolo(\'' + cart.id + '\',' + idx + ',this.value)">';
-        h += '</div>';
-        h += '<div class="ct-panel-preview" id="pp-sc-' + idx + '">';
-        h += '<span class="ct-pp-orig">Orig: €' + (parsePriceIT(pBase4sc)*q).toFixed(2) + '</span>';
-        h += '<span class="ct-pp-fin">Fin: €' + fin4sc + '</span>';
-        h += '</div>';
-      }
+      var pBase4sc = it._prezzoOriginale || it._prezzoBase || it.prezzoUnit || '0';
+      var scAtt4sc = it._scontoApplicato || 0;
+      var fin4sc   = scAtt4sc > 0
+        ? (parsePriceIT(pBase4sc)*(1-scAtt4sc/100)*q).toFixed(2)
+        : (parsePriceIT(pBase4sc)*q).toFixed(2);
+      h += '<div class="ct-panel-row">';
+      h += '<label class="ct-pl">Sconto %</label>';
+      // oninput → ricalcolo LIVE, onchange → salva nel dato
+      h += '<input type="number" min="0" max="100" value="' + scAtt4sc + '" class="ct-pi" ' +
+           'oninput="ctCalcolaLive(this,' + idx + ',\'' + pBase4sc + '\',' + q + ')" ' +
+           'onchange="cartSetScontoScampolo(\'' + cart.id + '\',' + idx + ',this.value)">';
+      h += '</div>';
+      // Preview BLU → VERDE
+      h += '<div class="ct-panel-preview" id="pp-sc-' + idx + '">';
+      h += '<span class="ct-pp-orig">Orig: €' + (parsePriceIT(pBase4sc)*q).toFixed(2) + '</span>';
+      h += '<span class="ct-pp-fin">Fin: €' + fin4sc + '</span>';
+      h += '</div>';
+      // Scaglioni (se presenti)
       if(it.hasScaglioni || hasScag){
         var baseP    = it._prezzoBase || it.prezzoUnit || '0';
         var basePNum = parsePriceIT(baseP) || 0;
-        h += '<div style="font-size:10px;color:#63b3ed;margin:4px 0 5px">📊 Scaglioni — base €' + esc(baseP) + '</div>';
+        h += '<div style="font-size:10px;color:#63b3ed;margin:6px 0 5px">📊 Scaglioni — base €' + esc(baseP) + '</div>';
         (it.scaglioni||[]).forEach(function(sg, si){
           var pc = basePNum > 0 && sg.sconto ? (basePNum*(1-sg.sconto/100)).toFixed(2) : '';
           h += '<div class="ct-scag-row">';
@@ -1286,21 +1287,21 @@ function renderCartTabs(){
         });
         h += '<button class="ct-scag-add" onclick="cartAddScag(\'' + cart.id + '\',' + idx + ')">+ scaglione</button>';
       }
-      h += '</div>';
+      h += '</div>'; // fine pannello sconto
 
-      // Pannello Note
+      // Pannello NOTE
       h += '<div id="' + pNoId + '" class="ct-panel" style="display:none">';
       h += '<textarea class="ct-nota-inp" placeholder="Nota articolo..." ' +
            'oninput="cartSetNota(\'' + cart.id + '\',' + idx + ',this.value)">' +
            esc(it.nota||'') + '</textarea>';
       h += '</div>';
 
-      // Preview nota
+      // Preview nota (se presente)
       if(hasNota){
         h += '<div class="ct-nota-prev">📝 ' + esc(it.nota) + '</div>';
       }
 
-      // Badge stato attivi
+      // Badge stati attivi
       var badges = '';
       if(isTuttoRotolo) badges += '<span class="ct-badge ct-badge--red">🔴 ROTOLO INTERO</span> ';
       else if(scOn && it._scontoApplicato) badges += '<span class="ct-badge ct-badge--yellow">' +
@@ -1313,9 +1314,9 @@ function renderCartTabs(){
       if(badges) h += '<div class="ct-badges">' + badges + '</div>';
 
       h += '</div>'; // fine ct-card
-    });
+    }); // fine forEach items
 
-  } // fine items.length
+  } // fine items.length > 0
 
   // ── NOTA ORDINE ───────────────────────────────────────────────────────────
   h += '<div id="cart-order-nota-row">';
@@ -1323,20 +1324,15 @@ function renderCartTabs(){
        'oninput="cartSetNotaOrdine(\'' + cart.id + '\',this.value)">' + esc(cart.nota||'') + '</textarea>';
   h += '</div>';
 
-  // ══ STICKY FOOTER — ultra-sottile, giallo ════════════════════════════════
-  var tot2    = (cart.items||[]).reduce(function(s,it){
-    return s + parsePriceIT(it.prezzoUnit) * parseFloat(it.qty||0);
-  }, 0);
+  // ── STICKY FOOTER ─────────────────────────────────────────────────────────
+  var tot2    = (cart.items||[]).reduce(function(s,it){ return s + parsePriceIT(it.prezzoUnit) * parseFloat(it.qty||0); }, 0);
   var tot2Fin = cart.scontoGlobale ? tot2*(1-cart.scontoGlobale/100) : tot2;
   h += '<div id="cart-pos-footer">';
   h += '<div class="ct-footer">';
   h += '<div class="ct-footer-tot"><span class="ct-footer-sym">€</span>' + tot2Fin.toFixed(2) + '</div>';
   h += '<div class="ct-footer-btns">';
-  // 🗑️ SVUOTA
   h += '<button class="ct-fbtn ct-fbtn--danger" onclick="svuotaCarrello(\'' + cart.id + '\')">🗑️<span>SVUOTA</span></button>';
-  // 👀 RIEPILOGO — logica checkbox invariata, non toccare
   h += '<button class="ct-fbtn ct-fbtn--riepilogo" onclick="openRiepilogoOrdine(\'' + cart.id + '\')">👀<span>RIEPILOGO</span></button>';
-  // 🛍️ CONFERMA — SOLO DBLCLICK, singolo click mostra avviso
   if(cart.stato === 'modifica'){
     h += '<button class="ct-fbtn ct-fbtn--cassa" id="ctf-cassa-' + cart.id + '" ' +
          'onclick="ctCassaSingleClick(this)" ondblclick="aggiornaOrdine(\'' + cart.id + '\')">' +
@@ -1347,14 +1343,77 @@ function renderCartTabs(){
          'onclick="ctCassaSingleClick(this)" ondblclick="inviaOrdine(\'' + cart.id + '\')">' +
          '🛍️<span>CONFERMA</span></button>';
   }
-  h += '</div>'; // fine ct-footer-btns
-  h += '</div>'; // fine ct-footer
+  h += '</div>';
+  h += '</div>';
   h += '</div>'; // fine cart-pos-footer
 
   body.innerHTML = h;
 }
 
+// =============================================================================
+//  CLIENTI DROPDOWN — Menu raggruppato per giorno
+// =============================================================================
+var _gg = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
 
+function ctApriClienti(){
+  var dd = document.getElementById('ct-clienti-dropdown');
+  if(!dd) return;
+  ctRenderClientiList();
+  dd.classList.add('open');
+}
+
+function ctChiudiClienti(){
+  var dd = document.getElementById('ct-clienti-dropdown');
+  if(dd) dd.classList.remove('open');
+}
+
+function ctRenderClientiList(){
+  var list = document.getElementById('ct-clienti-list');
+  if(!list) return;
+  if(!carrelli.length){
+    list.innerHTML = '<div style="text-align:center;color:#555;padding:20px;font-size:13px;">Nessun cliente.<br>Premi ＋ NUOVO per iniziare.</div>';
+    return;
+  }
+  // Raggruppa per giorno (da dataCreazione)
+  var byDay = {};
+  var oggi  = new Date();
+  carrelli.forEach(function(cart, ci){
+    var label = 'Altro';
+    if(cart.dataCreazione){
+      var d    = new Date(cart.dataCreazione);
+      var diff = Math.floor((oggi - d) / 86400000);
+      if(diff === 0)     label = 'Oggi — ' + _gg[d.getDay()];
+      else if(diff === 1) label = 'Ieri — ' + _gg[d.getDay()];
+      else if(diff < 7)   label = _gg[d.getDay()] + ' (' + diff + ' gg fa)';
+      else                label = d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'});
+    }
+    if(!byDay[label]) byDay[label] = [];
+    byDay[label].push({cart:cart, ci:ci});
+  });
+
+  var h = '';
+  Object.keys(byDay).forEach(function(day){
+    h += '<div class="ct-clienti-day">' + esc(day) + '</div>';
+    byDay[day].forEach(function(item){
+      var cart     = item.cart;
+      var ci       = item.ci;
+      var n        = (cart.items||[]).length;
+      var isActive = cart.id === activeCartId;
+      var stato    = cart.stato === 'inviato' ? '✅ ' : cart.stato === 'modifica' ? '✏️ ' : '';
+      h += '<button class="ct-clienti-btn' + (isActive ? ' active' : '') + '" ' +
+           'onclick="ctSelezionaCliente(' + ci + ')">' +
+           '<span>' + stato + esc(cart.nome || '—') + '</span>' +
+           (n ? '<span class="ct-clienti-n">' + n + ' art.</span>' : '') +
+           '</button>';
+    });
+  });
+  list.innerHTML = h;
+}
+
+function ctSelezionaCliente(ci){
+  switchCart(ci);
+  ctChiudiClienti();
+}
 
 // =============================================================================
 //  FUNZIONI HELPER CARRELLO NUOVO
@@ -6336,75 +6395,3 @@ document.addEventListener('click', function(e){
 
 // Render iniziale
 setTimeout(function(){ CT.render(); }, 350);
-
-// ══════════════════════════════════════════════════════════════════
-//  CLIENTI DROPDOWN — Menu a tendina raggruppato per giorno
-//  Funzioni: ctApriClienti, ctChiudiClienti, ctRenderClientiList
-// ══════════════════════════════════════════════════════════════════
-
-// Giorni della settimana in italiano (0=Dom, 1=Lun, ...)
-var _gg = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
-
-function ctApriClienti(){
-  var dd = document.getElementById('ct-clienti-dropdown');
-  if(!dd) return;
-  ctRenderClientiList();
-  dd.classList.add('open');
-}
-
-function ctChiudiClienti(){
-  var dd = document.getElementById('ct-clienti-dropdown');
-  if(dd) dd.classList.remove('open');
-}
-
-function ctRenderClientiList(){
-  var list = document.getElementById('ct-clienti-list');
-  if(!list) return;
-
-  if(!carrelli.length){
-    list.innerHTML = '<div style="text-align:center;color:#555;padding:20px;font-size:13px;">Nessun cliente.<br>Premi ＋ NUOVO per iniziare.</div>';
-    return;
-  }
-
-  // Raggruppa per giorno in base a cart.data (timestamp creazione)
-  // Se non c'è data, usa "Altro"
-  var byDay = {};
-  carrelli.forEach(function(cart, ci){
-    var label = 'Altro';
-    if(cart.dataCreazione){
-      var d = new Date(cart.dataCreazione);
-      var oggi = new Date();
-      var diff = Math.floor((oggi - d) / 86400000); // giorni fa
-      if(diff === 0) label = 'Oggi — ' + _gg[d.getDay()];
-      else if(diff === 1) label = 'Ieri — ' + _gg[d.getDay()];
-      else if(diff < 7) label = _gg[d.getDay()] + ' (' + diff + ' gg fa)';
-      else label = d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'});
-    }
-    if(!byDay[label]) byDay[label] = [];
-    byDay[label].push({ cart: cart, ci: ci });
-  });
-
-  var h = '';
-  Object.keys(byDay).forEach(function(day){
-    h += '<div class="ct-clienti-day">' + esc(day) + '</div>';
-    byDay[day].forEach(function(item){
-      var cart = item.cart;
-      var ci   = item.ci;
-      var n    = (cart.items||[]).length;
-      var isActive = cart.id === activeCartId;
-      var stato = cart.stato === 'inviato' ? '✅ ' : cart.stato === 'modifica' ? '✏️ ' : '';
-      h += '<button class="ct-clienti-btn' + (isActive ? ' active' : '') + '" ' +
-           'onclick="ctSelezionaCliente(' + ci + ')">' +
-           '<span>' + stato + esc(cart.nome || '—') + '</span>' +
-           (n ? '<span class="ct-clienti-n">' + n + ' art.</span>' : '') +
-           '</button>';
-    });
-  });
-
-  list.innerHTML = h;
-}
-
-function ctSelezionaCliente(ci){
-  switchCart(ci);
-  ctChiudiClienti();
-}
