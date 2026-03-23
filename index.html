@@ -987,7 +987,23 @@ body.light-mode #confirm-overlay > div { background:#fff; }
 <!-- TAB ORDINI -->
 <div id="to" class="tab-content">
 <div class="panel">
-  <h2>📋 Ordini</h2>
+  <!-- Titolo + contatore filtrato + calendario -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+    <h2 style="margin:0;border:none;padding:0;">📋 Ordini</h2>
+    <span id="ord-filter-count" class="ord-fcount">0</span>
+    <div style="flex:1;"></div>
+    <button onclick="toggleOrdCalendario()" id="ord-cal-btn" style="padding:6px 14px;border-radius:12px;border:2px solid #555;background:transparent;color:#aaa;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:4px;">📅 Calendario</button>
+  </div>
+  <!-- Calendario (nascosto di default) -->
+  <div id="ord-calendario" style="display:none;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <input type="date" id="ord-cal-date" onchange="renderOrdiniByDate()"
+        style="padding:8px 12px;border:2px solid var(--accent);border-radius:10px;background:#1a1a1a;color:var(--accent);font-size:14px;font-weight:800;font-family:inherit;cursor:pointer;">
+      <button onclick="ordCalOggi()" style="padding:6px 12px;border-radius:8px;border:1px solid #333;background:transparent;color:#888;font-size:11px;font-weight:700;cursor:pointer;">Oggi</button>
+      <button onclick="chiudiOrdCalendario()" style="padding:6px 10px;border-radius:8px;border:1px solid #333;background:transparent;color:#666;font-size:11px;cursor:pointer;">✕ Chiudi</button>
+    </div>
+    <div id="ord-cal-results"></div>
+  </div>
   <!-- Contatore ordini in attesa -->
   <div id="ord-counter-banner" style="display:none;margin-bottom:12px;"></div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">

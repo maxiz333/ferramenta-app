@@ -553,21 +553,15 @@ function cartCycleScampolo(cartId,idx){
   var cart=carrelli.find(function(c){return c.id===cartId;});
   if(!cart||!cart.items[idx])return;
   var it=cart.items[idx];
-  if(!it.scampolo&&!it.fineRotolo){
-    // niente - scampolo
+  if(!it.scampolo){
+    // niente → scampolo
     if(!it._prezzoOriginale)it._prezzoOriginale=it.prezzoUnit;
     it.scampolo=true;it.fineRotolo=false;
     it._scontoTipo='scampolo';
     if(!it._scontoApplicato)it._scontoApplicato=30;
     _applicaScontoScampolo(it);
-  } else if(it.scampolo){
-    // scampolo - rotolo
-    it.scampolo=false;it.fineRotolo=true;
-    it._scontoTipo='rotolo';
-    if(!it._scontoApplicato||it._scontoApplicato===30)it._scontoApplicato=50;
-    _applicaScontoScampolo(it);
   } else {
-    // rotolo - niente: ripristina prezzo
+    // scampolo → niente: ripristina prezzo
     it.scampolo=false;it.fineRotolo=false;
     if(it._prezzoOriginale){it.prezzoUnit=it._prezzoOriginale;delete it._prezzoOriginale;}
     delete it._scontoTipo;delete it._scontoApplicato;
@@ -1074,6 +1068,16 @@ function renderCartTabs(){
     h += '<button onclick="openScontoOverlay()" class="ct-btn-sconto">% Sconto</button>';
     h += '</div>';
 
+    // ── GRIGLIA ARTICOLI — stessa struttura tab ordini ─────────────
+    h += '<div class="ord-items-wrap">';
+    h += '<div class="ord-grid ord-grid-head">';
+    h += '<div class="ord-gh">Prodotto</div>';
+    h += '<div class="ord-gh ord-gh-c">Qtà</div>';
+    h += '<div class="ord-gh ord-gh-c">Prezzo</div>';
+    h += '<div class="ord-gh ord-gh-c">Tot</div>';
+    h += '</div>';
+    h += '</div>';
+
     // ── CARD ARTICOLI ──────────────────────────────────────────────────────
     (cart.items||[]).forEach(function(it, idx){
       var p            = parsePriceIT(it.prezzoUnit);
@@ -1106,42 +1110,42 @@ function renderCartTabs(){
       h += '<div class="' + cardClass + '" id="cart-row-' + idx + '"' +
            (cardStyle ? ' style="' + cardStyle + '"' : '') + '>';
 
-      // ── RIGA A: foto | info(nome+codici) | prezzo ─────────────────────────
-      h += '<div class="ct-row">';
+      // ── RIGA GRIGLIA: stessa struttura ord-grid 50%|15%|15%|20% ──────
+      h += '<div class="ord-grid ord-grid-row' + (idx%2===0 ? ' ord-grid-even' : ' ord-grid-odd') + '">';
 
-      // Miniatura
-      if(it.foto){
-        h += '<img class="ct-thumb" src="' + it.foto + '" alt="" onclick="apriModalFoto(this.src)">';
-      } else {
-        h += '<div class="ct-thumb ct-thumb--empty">📦</div>';
-      }
+      // Colonna prodotto: nome + codici
+      h += '<div class="ord-gc-desc">';
+      h += '<div class="ord-item-name">' + esc(it.desc || '—') + '</div>';
+      var codes = '';
+      if(codM7) codes += '<span class="ord-code-mag">' + esc(codM7) + '</span>';
+      // Cod.Forn editabile
+      codes += '<span class="ord-code-forn" style="display:inline-flex;align-items:center;gap:2px;">Forn: ';
+      codes += '<input class="ct-codf-inp" value="' + esc(codF) + '" placeholder="—" ' +
+               'oninput="ctSetCodF(\'' + cart.id + '\',' + idx + ',this.value)" ' +
+               'onclick="event.stopPropagation();this.select()" ' +
+               'onkeydown="if(event.key===\'Enter\')this.blur()">';
+      codes += '</span>';
+      h += '<div class="ord-item-codes">' + codes + '</div>';
+      h += '</div>';
 
-      // Info: nome COMPLETO (sempre a capo) + codici GRANDI affiancati
-      h += '<div class="ct-info">';
-      // Nome — display:block, word-break:break-word — SEMPRE leggibile
-      h += '<div class="ct-nome">' + esc(it.desc || '—') + '</div>';
-      // Riga codici: 14px, Cod.Mag giallo | Cod.Forn rosso editabile
-      h += '<div class="ct-codes">';
-      if(codM7){
-        h += '<span class="ct-code ct-code--mag">Cod.Mag <b>' + esc(codM7) + '</b></span>';
-        h += '<span class="ct-code-sep">|</span>';
-      }
-      h += '<span class="ct-code">Cod.Forn ';
-      h += '<input class="ct-codf-inp" ';
-      h += 'value="' + esc(codF) + '" ';
-      h += 'placeholder="—" ';
-      h += 'title="Clicca per modificare" ';
-      h += 'oninput="ctSetCodF(\'' + cart.id + '\',' + idx + ',this.value)" ';
-      h += 'onclick="event.stopPropagation();this.select()" ';
-      h += 'onkeydown="if(event.key===\'Enter\')this.blur()">';
-      h += '</span>';
-      h += '</div>'; // fine ct-codes
-      h += '</div>'; // fine ct-info
+      // Colonna quantità — stepper interattivo
+      h += '<div class="ord-gc-qty ct-grid-qty">';
+      h += '<div class="ct-qty ct-qty--compact">';
+      h += '<button class="ct-qty-btn" onclick="cartDelta(\'' + cart.id + '\',' + idx + ',-1)">−</button>';
+      h += '<button class="ct-qty-val" onclick="openQtyNumpad(\'' + cart.id + '\',' + idx + ')">' + Math.round(q) + '</button>';
+      h += '<button class="ct-qty-btn" onclick="cartDelta(\'' + cart.id + '\',' + idx + ',1)">＋</button>';
+      h += '</div>';
+      var units = ['pz','mt','kg','lt','cf','ml','gr','mm','cm','m²','m³'];
+      var curUnit = it.unit || 'pz';
+      h += '<select class="ct-um-select ct-um--mini" onchange="cartSetUnit(\'' + cart.id + '\',' + idx + ',this.value)">';
+      units.forEach(function(u){
+        h += '<option value="' + u + '"' + (u === curUnit ? ' selected' : '') + '>' + u + '</option>';
+      });
+      h += '</select>';
+      h += '</div>';
 
-      // ── BLOCCO PREZZI: BLU sbarrato → VERDE finale ────────────────────────
-      // id="prz-IDX" — aggiornato in tempo reale da ctCalcolaLive()
-      h += '<div class="ct-price-block" id="prz-' + idx + '">';
-
+      // Colonna prezzo — con blocco blu/verde e input editabile
+      h += '<div class="ord-gc-price" id="prz-' + idx + '">';
       var prezOrigNum = 0;
       var prezFinNum  = p;
       var hasSconto   = false;
@@ -1152,67 +1156,67 @@ function renderCartTabs(){
         prezOrigNum = parsePriceIT(it._prezzoOriginale);
         hasSconto   = prezOrigNum > prezFinNum + 0.005;
       }
-
       if(hasSconto){
-        // BLU sbarrato = originale, VERDE grassetto = finale
-        h += '<div class="ct-old--orig">€' + (prezOrigNum * q).toFixed(2) + '</div>';
-        h += '<div class="ct-sub--final">€' + sub + '</div>';
+        h += '<div class="ct-old--orig" style="font-size:11px">€' + prezOrigNum.toFixed(2) + '</div>';
+        h += '<div class="ct-sub--final" style="font-size:13px">€' + p.toFixed(2) + '</div>';
       } else {
-        // Giallo standard (rosso se rotolo intero, arancio se fine rotolo)
-        var subColor = isTuttoRotolo ? '#fc8181' : (isFR ? '#f6ad55' : '#FFD700');
-        h += '<div class="ct-sub" style="color:' + subColor + '">€' + sub + '</div>';
+        h += '<div style="font-size:13px;font-weight:900;color:#999">€' + p.toFixed(2) + '</div>';
       }
-
-      // Input €/unità (piccolo, editabile)
       h += '<input class="ct-punit" type="text" inputmode="decimal" value="' +
            esc(it.prezzoUnit||'0') + '" ' +
            'onchange="cartSetPrezzo(\'' + cart.id + '\',' + idx + ',this.value)" ' +
-           'onclick="this.select()" title="€/unità">';
-      h += '</div>'; // fine ct-price-block
-
-      h += '</div>'; // fine ct-row A
-
-      // ── RIGA B: stepper qty (INTERI) + U.M. ──────────────────────────────
-      h += '<div class="ct-row-b">';
-      h += '<div class="ct-qty">';
-      h += '<button class="ct-qty-btn" onclick="cartDelta(\'' + cart.id + '\',' + idx + ',-1)">−</button>';
-      h += '<button class="ct-qty-val" onclick="openQtyNumpad(\'' + cart.id + '\',' + idx + ')">' + Math.round(q) + '</button>';
-      h += '<button class="ct-qty-btn" onclick="cartDelta(\'' + cart.id + '\',' + idx + ',1)">＋</button>';
+           'onclick="this.select()" title="€/unità" style="width:54px;margin-top:2px">';
       h += '</div>';
-      var units   = ['pz','mt','kg','lt','cf','ml','gr','mm','cm','m²','m³'];
-      var curUnit = it.unit || 'pz';
-      h += '<select class="ct-um-select" title="U.M." onchange="cartSetUnit(\'' + cart.id + '\',' + idx + ',this.value)">';
-      units.forEach(function(u){
-        h += '<option value="' + u + '"' + (u === curUnit ? ' selected' : '') + '>' + u + '</option>';
-      });
-      h += '</select>';
-      h += '<div class="ct-row-b-spacer"></div>';
-      h += '</div>'; // fine ct-row-b
 
-      // ── ICONBAR: Forbici | % | Note | Ordina | Cestino ───────────────────
+      // Colonna totale
+      h += '<div class="ord-gc-sub">';
+      if(hasSconto){
+        h += '<div class="ct-old--orig" style="font-size:11px">€' + (prezOrigNum * q).toFixed(2) + '</div>';
+        h += '<div class="ct-sub--final" style="font-size:14px">€' + sub + '</div>';
+      } else {
+        var subColor = isTuttoRotolo ? '#fc8181' : (isFR ? '#f6ad55' : 'var(--accent)');
+        h += '<div style="font-size:14px;font-weight:900;color:' + subColor + '">€' + sub + '</div>';
+      }
+      h += '</div>';
+
+      h += '</div>'; // fine ord-grid row
+
+      // ── ICONBAR: SCONTI(menu) | Note | Ordina | Cestino ───────────────────
       h += '<div class="ct-iconbar">';
 
-      // FORBICI — tap singolo: scampolo | doppio tap: ROTOLO INTERO (bordo rosso)
-      var forbLbl = isTuttoRotolo ? 'ROTOLO' : (scOn ? (isFR ? 'ROTOLO' : 'SCAMPOLO') : '');
-      h += '<button class="ct-icon-btn' +
-           (scOn||isTuttoRotolo ? ' ct-icon-btn--on' : '') +
-           (isTuttoRotolo ? ' ct-icon-btn--rotolo' : '') + '" ' +
-           'onclick="ctForbiciTap(\'' + cart.id + '\',' + idx + ')" ' +
-           'title="Tap: scampolo | 2 tap rapidi: TUTTO IL ROTOLO">';
-      h += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-           '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>' +
-           '<line x1="20" y1="4" x2="8.12" y2="15.88"/>' +
-           '<line x1="14.47" y1="14.48" x2="20" y2="20"/>' +
-           '<line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>';
-      h += (forbLbl ? '<span>' + forbLbl + '</span>' : '') + '</button>';
-
-      // SCONTO %
-      var hasScag = scagAp || scagAtt;
-      h += '<button class="ct-icon-btn' + (hasScag ? ' ct-icon-btn--on' : '') + '" ' +
-           'onclick="ctTogglePanel(\'' + cart.id + '\',' + idx + ',\'sconto\')" title="Sconto / Scaglioni">';
+      // MENU SCONTI — collassabile
+      var scontiOpen = _ctScontiMenuState[cart.id + '-' + idx] || false;
+      var hasScontoAttivo = scOn || isTuttoRotolo || (it._scontoApplicato && it._scontoApplicato > 0) || scagAtt;
+      h += '<button class="ct-icon-btn ct-icon-btn--sconti' +
+           (hasScontoAttivo ? ' ct-icon-btn--on' : '') + '" ' +
+           'onclick="ctToggleScontiMenu(\'' + cart.id + '\',' + idx + ')">';
       h += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
            '<line x1="19" y1="5" x2="5" y2="19"/>' +
-           '<circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></button>';
+           '<circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>';
+      h += '<span>SCONTI</span></button>';
+
+      if(scontiOpen){
+        var forbLbl = isTuttoRotolo ? 'ROTOLO' : (scOn ? (isFR ? 'ROTOLO' : 'SCAMPOLO') : '');
+        h += '<button class="ct-icon-btn' +
+             (scOn||isTuttoRotolo ? ' ct-icon-btn--on' : '') +
+             (isTuttoRotolo ? ' ct-icon-btn--rotolo' : '') + '" ' +
+             'onclick="ctForbiciTap(\'' + cart.id + '\',' + idx + ')" ' +
+             'title="Tap: scampolo | 2 tap rapidi: TUTTO IL ROTOLO">';
+        h += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+             '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>' +
+             '<line x1="20" y1="4" x2="8.12" y2="15.88"/>' +
+             '<line x1="14.47" y1="14.48" x2="20" y2="20"/>' +
+             '<line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>';
+        h += (forbLbl ? '<span>' + forbLbl + '</span>' : '<span>FORBICI</span>') + '</button>';
+
+        var hasScag = scagAp || scagAtt;
+        h += '<button class="ct-icon-btn' + (hasScag ? ' ct-icon-btn--on' : '') + '" ' +
+             'onclick="ctTogglePanel(\'' + cart.id + '\',' + idx + ',\'sconto\')" title="Sconto / Scaglioni">';
+        h += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+             '<line x1="19" y1="5" x2="5" y2="19"/>' +
+             '<circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>';
+        h += '<span>%</span></button>';
+      }
 
       // NOTE
       h += '<button class="ct-icon-btn' + (hasNota ? ' ct-icon-btn--on' : '') + '" ' +
@@ -1223,7 +1227,7 @@ function renderCartTabs(){
            '<line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>' +
            '<polyline points="10 9 9 9 8 9"/></svg></button>';
 
-      // ORDINA (con colore fornitore)
+      // ORDINA
       var ordStyle = it._ordColore
         ? 'background:' + it._ordColore + '33;border-color:' + it._ordColore + ';color:' + it._ordColore
         : '';
@@ -1250,7 +1254,9 @@ function renderCartTabs(){
       var pNoId = 'ctp-no-' + idx;
 
       // Pannello SCONTO — input numerico con ricalcolo LIVE (oninput)
-      h += '<div id="' + pScId + '" class="ct-panel" style="display:none">';
+      var _pKey = cart.id + '-' + idx;
+      var scPanelOpen = _ctPanelState[_pKey] === 'sconto';
+      h += '<div id="' + pScId + '" class="ct-panel" style="display:' + (scPanelOpen ? 'block' : 'none') + '">';
       var pBase4sc = it._prezzoOriginale || it._prezzoBase || it.prezzoUnit || '0';
       var scAtt4sc = it._scontoApplicato || 0;
       var fin4sc   = scAtt4sc > 0
@@ -1290,7 +1296,8 @@ function renderCartTabs(){
       h += '</div>'; // fine pannello sconto
 
       // Pannello NOTE
-      h += '<div id="' + pNoId + '" class="ct-panel" style="display:none">';
+      var notaPanelOpen = _ctPanelState[_pKey] === 'nota';
+      h += '<div id="' + pNoId + '" class="ct-panel" style="display:' + (notaPanelOpen ? 'block' : 'none') + '">';
       h += '<textarea class="ct-nota-inp" placeholder="Nota articolo..." ' +
            'oninput="cartSetNota(\'' + cart.id + '\',' + idx + ',this.value)">' +
            esc(it.nota||'') + '</textarea>';
@@ -1423,12 +1430,15 @@ function ctSelezionaCliente(ci){
 var CT_FORN_KEY = 'cp4_forniColore';
 
 // ctTogglePanel: mostra/nasconde pannello a comparsa (sconto|nota)
-// Usa display none/block — non occupa spazio se non attivo
+// Stato salvato in _ctPanelState (JS puro, non nei dati carrello/Firebase)
+var _ctPanelState = {}; // chiave: cartId+'-'+idx → 'sconto'|'nota'|null
 function ctTogglePanel(cartId, idx, tipo){
+  var key = cartId + '-' + idx;
   var ids = { sconto: 'ctp-sc-', nota: 'ctp-no-' };
   var targetId = (ids[tipo] || 'ctp-') + idx;
   var el = document.getElementById(targetId);
   if(!el) return;
+  var isOpen = el.style.display !== 'none';
   // Chiude l'altro pannello della stessa card
   Object.keys(ids).forEach(function(t){
     if(t !== tipo){
@@ -1436,8 +1446,8 @@ function ctTogglePanel(cartId, idx, tipo){
       if(other) other.style.display = 'none';
     }
   });
-  var isOpen = el.style.display !== 'none';
   el.style.display = isOpen ? 'none' : 'block';
+  _ctPanelState[key] = isOpen ? null : tipo;
   if(tipo === 'nota' && !isOpen){
     var ta = el.querySelector('textarea');
     if(ta) setTimeout(function(){ ta.focus(); }, 40);
@@ -1448,6 +1458,14 @@ function ctTogglePanel(cartId, idx, tipo){
 // Il singolo click deve essere ignorato se fa parte di un dblclick.
 // Usiamo un timer: se entro 250ms arriva il secondo click (dblclick nativo),
 // il singolo viene annullato — il dblclick gestisce "Tutto il Rotolo".
+// ctToggleScontiMenu: apre/chiude il menu sconti compatto nella iconbar
+var _ctScontiMenuState = {}; // chiave: cartId+'-'+idx → true/false
+function ctToggleScontiMenu(cartId, idx){
+  var key = cartId + '-' + idx;
+  _ctScontiMenuState[key] = !_ctScontiMenuState[key];
+  renderCartTabs();
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ctForbiciTap — TAP SINGOLO / DOPPIO TAP sulle forbici
 // Funziona su iPhone Safari dove ondblclick non è affidabile.
@@ -1778,17 +1796,30 @@ function ctCalcolaLive(inputEl, idx, baseStr, qty){
     ppEl.querySelector('.ct-pp-orig').textContent = 'Orig: €' + (base*q).toFixed(2);
     ppEl.querySelector('.ct-pp-fin').textContent  = 'Fin: €'  + (finale*q).toFixed(2);
   }
-  // Aggiorna anche blocco prezzi della card (prz-IDX) in tempo reale
+  // Aggiorna cella prezzo unitario (prz-IDX) — nella griglia è la colonna "Prezzo"
   var przEl = document.getElementById('prz-' + idx);
   if(przEl){
-    var origEl = przEl.querySelector('.ct-old--orig, .ct-old--orig-live');
-    var finEl  = przEl.querySelector('.ct-sub--final, .ct-sub--final-live');
-    var subEl  = przEl.querySelector('.ct-sub');
+    var origEl = przEl.querySelector('.ct-old--orig');
+    var finEl  = przEl.querySelector('.ct-sub--final');
     if(perc > 0 && base > finale + 0.005){
-      if(origEl) origEl.textContent = '€' + (base*q).toFixed(2);
-      if(finEl)  finEl.textContent  = '€' + (finale*q).toFixed(2);
-    } else if(subEl){
-      subEl.textContent = '€' + (finale*q).toFixed(2);
+      if(origEl) origEl.textContent = '€' + base.toFixed(2);
+      if(finEl)  finEl.textContent  = '€' + finale.toFixed(2);
+      // Se non esistono ancora (era prezzo normale), riscrivi
+      if(!origEl && !finEl){
+        przEl.innerHTML = '<div class="ct-old--orig" style="font-size:11px">€' + base.toFixed(2) + '</div>' +
+          '<div class="ct-sub--final" style="font-size:13px">€' + finale.toFixed(2) + '</div>' +
+          przEl.querySelector('.ct-punit').outerHTML;
+      }
+    }
+  }
+  // Aggiorna cella totale — è il nextElementSibling di prz-IDX nella griglia
+  if(przEl && przEl.nextElementSibling){
+    var totCell = przEl.nextElementSibling;
+    if(perc > 0 && base > finale + 0.005){
+      totCell.innerHTML = '<div class="ct-old--orig" style="font-size:11px">€' + (base*q).toFixed(2) + '</div>' +
+        '<div class="ct-sub--final" style="font-size:14px">€' + (finale*q).toFixed(2) + '</div>';
+    } else {
+      totCell.innerHTML = '<div style="font-size:14px;font-weight:900;color:var(--accent)">€' + (finale*q).toFixed(2) + '</div>';
     }
   }
 }
@@ -2048,6 +2079,7 @@ function inviaOrdine(cartId){
     nomeCliente:cart.nome,
     ora:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),
     data:new Date().toLocaleDateString('it-IT'),
+    dataISO:new Date().toISOString().slice(0,10),
     createdAt:new Date().toISOString(),
     items:JSON.parse(JSON.stringify(cart.items)),
     nota:cart.nota||'',
@@ -2601,30 +2633,152 @@ function updateOrdCounter(){
   var pronti=ordini.filter(function(o){return o.stato==='pronto';}).length;
   if(nuovi===0&&inCorso===0&&pronti===0){
     banner.style.display='none';
+  } else {
+    banner.style.display='block';
+    var h='<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+    if(nuovi>0){
+      h+='<div class="ord-counter-pulse" style="background:linear-gradient(135deg,#1a1a00,#2a2a00);border:2px solid var(--accent);border-radius:12px;padding:12px 16px;text-align:center;flex:1;min-width:80px;">';
+      h+='<div style="font-size:28px;font-weight:900;color:var(--accent);">'+nuovi+'</div>';
+      h+='<div style="font-size:10px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.5px;">🆕 Nuov'+(nuovi===1?'o':'i')+'</div>';
+      h+='</div>';
+    }
+    if(inCorso>0){
+      h+='<div style="background:#0d1a2a;border:1px solid #3182ce44;border-radius:12px;padding:12px 16px;text-align:center;flex:1;min-width:80px;">';
+      h+='<div style="font-size:28px;font-weight:900;color:#63b3ed;">'+inCorso+'</div>';
+      h+='<div style="font-size:10px;color:#63b3ed;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">⏳ In corso</div>';
+      h+='</div>';
+    }
+    if(pronti>0){
+      h+='<div style="background:#1a1500;border:1px solid #dd6b2044;border-radius:12px;padding:12px 16px;text-align:center;flex:1;min-width:80px;">';
+      h+='<div style="font-size:28px;font-weight:900;color:#f6ad55;">'+pronti+'</div>';
+      h+='<div style="font-size:10px;color:#f6ad55;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">📦 Pront'+(pronti===1?'o':'i')+'</div>';
+      h+='</div>';
+    }
+    h+='</div>';
+    banner.innerHTML=h;
+  }
+
+  // Contatore filtrato accanto al titolo
+  var fc=document.getElementById('ord-filter-count');
+  if(fc){
+    var count=0;
+    if(ordFiltro==='tutti') count=ordini.length;
+    else count=ordini.filter(function(o){return o.stato===ordFiltro;}).length;
+    fc.textContent=count;
+  }
+}
+
+// --- CALENDARIO STORICO ORDINI ---
+function toggleOrdCalendario(){
+  var cal=document.getElementById('ord-calendario');
+  var btn=document.getElementById('ord-cal-btn');
+  if(!cal)return;
+  var show=cal.style.display==='none';
+  cal.style.display=show?'block':'none';
+  if(btn){
+    btn.style.borderColor=show?'var(--accent)':'#555';
+    btn.style.color=show?'var(--accent)':'#aaa';
+  }
+  if(show){
+    var inp=document.getElementById('ord-cal-date');
+    if(inp && !inp.value) inp.value=new Date().toISOString().slice(0,10);
+    renderOrdiniByDate();
+  }
+}
+function chiudiOrdCalendario(){
+  var cal=document.getElementById('ord-calendario');
+  var btn=document.getElementById('ord-cal-btn');
+  if(cal) cal.style.display='none';
+  if(btn){btn.style.borderColor='#555';btn.style.color='#aaa';}
+}
+function ordCalOggi(){
+  var inp=document.getElementById('ord-cal-date');
+  if(inp) inp.value=new Date().toISOString().slice(0,10);
+  renderOrdiniByDate();
+}
+
+function _getOrdDataISO(ord){
+  // Prova dataISO diretto
+  if(ord.dataISO) return ord.dataISO;
+  // Fallback: ricava da createdAt (ISO string)
+  if(ord.createdAt) return ord.createdAt.slice(0,10);
+  // Fallback: ricava da data italiana "dd/mm/yyyy"
+  if(ord.data){
+    var p=ord.data.split('/');
+    if(p.length===3) return p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0');
+  }
+  return '';
+}
+
+function renderOrdiniByDate(){
+  var wrap=document.getElementById('ord-cal-results');
+  if(!wrap)return;
+  var inp=document.getElementById('ord-cal-date');
+  var selDate=inp?inp.value:'';
+  if(!selDate){wrap.innerHTML='';return;}
+
+  var filtered=ordini.filter(function(o){
+    return _getOrdDataISO(o)===selDate;
+  });
+
+  if(!filtered.length){
+    // Formatta data per messaggio
+    var dp=selDate.split('-');
+    var label=dp[2]+'/'+dp[1]+'/'+dp[0];
+    wrap.innerHTML='<div style="text-align:center;padding:30px 16px;color:#555;font-size:13px;">'+
+      '<div style="font-size:32px;margin-bottom:8px;">📅</div>'+
+      'Nessun ordine trovato per il <b style="color:#888;">'+label+'</b></div>';
     return;
   }
-  banner.style.display='block';
-  var h='<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-  if(nuovi>0){
-    h+='<div class="ord-counter-pulse" style="background:linear-gradient(135deg,#1a1a00,#2a2a00);border:2px solid var(--accent);border-radius:12px;padding:12px 16px;text-align:center;flex:1;min-width:80px;">';
-    h+='<div style="font-size:28px;font-weight:900;color:var(--accent);">'+nuovi+'</div>';
-    h+='<div style="font-size:10px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.5px;">- Nuov'+(nuovi===1?'o':'i')+'</div>';
+
+  var SC={nuovo:'#f5c400',lavorazione:'#3182ce',pronto:'#dd6b20',completato:'#38a169'};
+  var SL={nuovo:'NUOVO',lavorazione:'IN CORSO',pronto:'PRONTO',completato:'COMPLETATO'};
+
+  var h='<div style="font-size:12px;color:#888;font-weight:800;margin-bottom:10px;letter-spacing:1px;">'+filtered.length+' ORDINE'+(filtered.length>1?'':'')+'</div>';
+
+  filtered.forEach(function(ord){
+    var ost=ord.stato;
+    var sc=SC[ost]||'#555';
+    var tot=0;
+    (ord.items||[]).forEach(function(it){tot+=parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0);});
+
+    h+='<div class="ord-card" style="border-top:4px solid '+sc+';margin-bottom:14px;">';
+    h+='<div class="ord-card-stato" style="background:'+sc+';color:'+(ost==='nuovo'?'#111':'#fff')+'">'+SL[ost];
+    if(ord.numero) h+=' — #'+ord.numero;
     h+='</div>';
-  }
-  if(inCorso>0){
-    h+='<div style="background:#0d1a2a;border:1px solid #3182ce44;border-radius:12px;padding:12px 16px;text-align:center;flex:1;min-width:80px;">';
-    h+='<div style="font-size:28px;font-weight:900;color:#63b3ed;">'+inCorso+'</div>';
-    h+='<div style="font-size:10px;color:#63b3ed;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">- In corso</div>';
+    h+='<div class="ord-card-cliente">';
+    h+='<div class="ord-cliente-nome">'+esc(ord.nomeCliente||'—')+'</div>';
+    h+='<div class="ord-cliente-meta">'+esc(ord.data||'')+(ord.ora?' · '+ord.ora:'')+' · '+(ord.items||[]).length+' articol'+((ord.items||[]).length===1?'o':'i')+'</div>';
     h+='</div>';
-  }
-  if(pronti>0){
-    h+='<div style="background:#1a1500;border:1px solid #dd6b2044;border-radius:12px;padding:12px 16px;text-align:center;flex:1;min-width:80px;">';
-    h+='<div style="font-size:28px;font-weight:900;color:#f6ad55;">'+pronti+'</div>';
-    h+='<div style="font-size:10px;color:#f6ad55;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">- Pront'+(pronti===1?'o':'i')+'</div>';
+
+    if(ord.nota) h+='<div class="ord-nota">📝 '+esc(ord.nota)+'</div>';
+
+    // Articoli in grid
+    h+='<div class="ord-items-wrap">';
+    h+='<div class="ord-grid ord-grid-head">';
+    h+='<div class="ord-gh">Prodotto</div><div class="ord-gh ord-gh-c">Qtà</div><div class="ord-gh ord-gh-c">Prezzo</div><div class="ord-gh ord-gh-c">Tot</div>';
     h+='</div>';
-  }
-  h+='</div>';
-  banner.innerHTML=h;
+    (ord.items||[]).forEach(function(it,ii){
+      var pu=parsePriceIT(it.prezzoUnit);var q=parseFloat(it.qty||0);var sub=(pu*q).toFixed(2);
+      h+='<div class="ord-grid ord-grid-row'+(ii%2===0?' ord-grid-even':' ord-grid-odd')+'">';
+      h+='<div class="ord-gc-desc"><div class="ord-item-name">'+esc(it.desc||'—')+'</div>';
+      var codes='';
+      if(it.codM) codes+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
+      if(it.codF) codes+='<span class="ord-code-forn">'+esc(it.codF)+'</span>';
+      if(codes) h+='<div class="ord-item-codes">'+codes+'</div>';
+      h+='</div>';
+      h+='<div class="ord-gc-qty">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
+      h+='<div class="ord-gc-price">€'+pu.toFixed(2)+'</div>';
+      h+='<div class="ord-gc-sub">€'+sub+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+
+    h+='<div class="ord-total-bar"><span class="ord-total-label">TOTALE</span><span class="ord-total-value">€ '+tot.toFixed(2)+'</span></div>';
+    h+='</div>';
+  });
+
+  wrap.innerHTML=h;
 }
 
 // --- VISTA CASSA (fullscreen per tablet/schermo cassa) -------
