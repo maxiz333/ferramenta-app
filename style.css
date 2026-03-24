@@ -1581,78 +1581,79 @@ button[touch-action="manipulation"],
 }
 .ct-header-row--pills::-webkit-scrollbar { display: none; }
 
-/* ── Tasto ORDINI — giallo compatto ────────────────────────────── */
+/* ── Tasto ORDINI — rosso, discreto ────────────────────────────── */
 #ct-btn-ordfor {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 7px 14px;
-  border-radius: 20px;
-  border: none;
-  background: var(--ct-yellow);
-  color: #111;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: .5px;
+  gap: 3px;
+  padding: 5px 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(229,62,62,.35);
+  background: transparent;
+  color: rgba(252,129,129,.7);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .3px;
   text-transform: uppercase;
   cursor: pointer;
   touch-action: manipulation;
-  box-shadow: 0 2px 8px rgba(255,215,0,.3);
   transition: transform .1s, filter .1s;
-  min-height: 34px;
+  min-height: 30px;
   white-space: nowrap;
 }
 #ct-btn-ordfor:active { transform: scale(.96); filter: brightness(.88); }
 
-/* ── Tasto CLIENTI — outline giallo compatto ───────────────────── */
+/* ── Tasto CLIENTI — arancione, discreto ───────────────────────── */
 #ct-btn-clienti {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 7px 12px;
-  border-radius: 20px;
-  border: 2px solid var(--ct-yellow);
+  gap: 3px;
+  padding: 5px 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(246,173,85,.4);
   background: transparent;
-  color: var(--ct-yellow);
-  font-size: 12px;
-  font-weight: 800;
+  color: #f6ad55;
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
-  min-height: 34px;
+  min-height: 30px;
   white-space: nowrap;
   transition: background .12s;
 }
+#ct-btn-clienti:active { background: rgba(246,173,85,.1); }
 #ct-btn-clienti:active { background: rgba(255,215,0,.1); }
 
 /* Badge numero clienti */
 #ct-btn-clienti .ct-pill-n {
-  background: rgba(255,215,0,.2);
-  color: var(--ct-yellow);
+  background: rgba(246,173,85,.2);
+  color: #f6ad55;
   border-radius: 8px;
   padding: 1px 6px;
   font-size: 10px;
   font-weight: 700;
 }
 
-/* ── Tasto NUOVO — dashed giallo compatto ────────────────────────── */
+/* ── Tasto NUOVO — giallo acceso, ben visibile ───────────────────── */
 .ct-pill--new {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 6px 11px;
+  gap: 4px;
+  padding: 7px 16px;
   border-radius: 20px;
-  border: 2px dashed var(--ct-yellow);
-  background: transparent;
-  color: var(--ct-yellow);
-  font-size: 12px;
-  font-weight: 800;
+  border: 2px solid #FFD700;
+  background: rgba(255,215,0,.15);
+  color: #FFD700;
+  font-size: 13px;
+  font-weight: 900;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
   touch-action: manipulation;
   min-height: 34px;
+  letter-spacing: .5px;
 }
-.ct-pill--new:active { background: rgba(255,215,0,.08); }
+.ct-pill--new:active { background: rgba(255,215,0,.3); }
 
 /* ── Pillole clienti: non si restringono mai ────────────────────── */
 .ct-pill {
@@ -1817,11 +1818,11 @@ button[touch-action="manipulation"],
 /* Banner modifica cantiere */
 .ct-banner-mod {
   background: repeating-linear-gradient(45deg, #1a1700, #1a1700 8px, #0d0d00 8px, #0d0d00 16px);
-  border: 2px dashed var(--ct-yellow);
-  border-radius: 10px; padding: 10px 14px; margin-bottom: 10px;
-  display: flex; align-items: center; gap: 10px;
+  border: 1px dashed var(--ct-yellow);
+  border-radius: 6px; padding: 5px 10px; margin: 4px 8px;
+  display: flex; align-items: center; gap: 6px;
 }
-.ct-banner-mod-title { font-size: 13px; font-weight: 800; color: var(--ct-yellow); }
+.ct-banner-mod-title { font-size: 11px; font-weight: 800; color: var(--ct-yellow); }
 
 /* ── Pulsanti base ────────────────────────────────────────────────── */
 .ct-btn-yellow {
@@ -1840,26 +1841,25 @@ button[touch-action="manipulation"],
 
 /* ── CERCA PER CODICE ────────────────────────────────────────────── */
 #cart-action-btns {
-  padding: 8px 8px 4px;
+  padding: 4px 8px 2px;
 }
 .ct-btn-cerca {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  width: 100%; padding: 14px 20px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 10px 16px;
   background: linear-gradient(135deg, #b38600, var(--ct-yellow));
-  color: #111; border: none; border-radius: 12px;
-  font-size: 18px; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase;
-  cursor: pointer; touch-action: manipulation; min-height: 54px;
-  box-shadow: 0 4px 16px rgba(255,215,0,.25);
+  color: #111; border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase;
+  cursor: pointer; touch-action: manipulation; min-height: 40px;
+  box-shadow: 0 2px 10px rgba(255,215,0,.2);
 }
 .ct-btn-cerca:active { filter: brightness(.88); }
-.ct-btn-icon { font-size: 22px; line-height: 1; }
 
 /* ── Barra ricerca testo ─────────────────────────────────────────── */
-#cart-search-wrap { padding: 6px 8px; }
+#cart-search-wrap { padding: 4px 8px; }
 
 /* ── Sticky totale ───────────────────────────────────────────────── */
 .ct-sticky-total {
-  position: sticky; top: calc(56px + 118px); z-index: 100;
+  position: sticky; top: calc(56px + 48px); z-index: 100;
   background: var(--ct-bg); padding: 6px 10px 4px;
   display: flex; align-items: center; gap: 8px;
   border-bottom: 1px solid var(--ct-border); margin-bottom: 6px;
@@ -2029,22 +2029,24 @@ button[touch-action="manipulation"],
 /* Prezzo ORIGINALE — BLU sbarrato */
 .ct-old,
 .ct-old--orig {
-  font-size: 12px;
-  color: var(--ct-blue);          /* BLU */
+  font-size: 10px;
+  color: var(--ct-blue);
   text-decoration: line-through;
   display: block;
-  text-align: right;
+  text-align: center;
   font-weight: 600;
+  line-height: 1.2;
 }
 
 /* Prezzo FINALE scontato — VERDE acceso, grassetto */
 .ct-sub--final {
-  font-size: 17px;
+  font-size: 13px;
   font-weight: 900;
-  color: var(--ct-green);         /* VERDE */
-  line-height: 1.1;
+  color: var(--ct-green);
+  line-height: 1.2;
   white-space: nowrap;
   display: block;
+  text-align: center;
 }
 
 /* Input prezzo/unità (piccolo sotto il prezzo) */
@@ -2123,6 +2125,21 @@ button[touch-action="manipulation"],
 .ct-icon-btn--del:active { color: var(--ct-red); }
 .ct-icon-btn--sconti { border-style: dashed; }
 .ct-icon-btn:active { filter: brightness(.82); }
+
+/* ── FORBICI + % INLINE ─────────────────────────────────────────── */
+.ct-forbici-row {
+  display: flex; align-items: center; gap: 4px; flex: 1;
+}
+.ct-sc-inline {
+  display: flex; align-items: center; gap: 2px;
+}
+.ct-sc-inp {
+  width: 38px; padding: 3px 2px; border: 1px solid #333;
+  border-radius: 5px; background: #111; color: #68d391;
+  font-size: 12px; font-weight: 700; text-align: center;
+}
+.ct-sc-pct { font-size: 11px; color: #68d391; font-weight: 700; }
+.ct-sc-risp { font-size: 10px; color: var(--ct-yellow); font-weight: 700; margin-left: 2px; }
 
 /* ── PANNELLI A COMPARSA ────────────────────────────────────────── */
 .ct-panel {
@@ -2422,8 +2439,19 @@ body.light-mode .ct-panel { background: #f5f5f5; }
   color:var(--accent); padding:2px 4px;
 }
 .ord-gc-qty .ord-unit { display:block; font-size:10px; font-weight:600; color:#888; }
-.ord-gc-price { text-align:center; font-size:13px; color:#999; padding:2px 4px; }
-.ord-gc-sub   { text-align:center; font-size:14px; font-weight:900; color:var(--text); padding:2px 4px; }
+.ord-gc-price { text-align:center; font-size:13px; color:#999; padding:2px 4px; display:flex; flex-direction:column; justify-content:center; align-items:center; }
+.ord-gc-sub   { text-align:center; font-size:14px; font-weight:900; color:var(--text); padding:2px 4px; display:flex; flex-direction:column; justify-content:center; align-items:center; }
+
+/* Celle editabili — doppio click */
+.ord-editable { cursor: pointer; border-radius: 4px; transition: background .15s; }
+.ord-editable:hover { background: rgba(255,215,0,.08); }
+.ord-inline-input {
+  width: 100%; box-sizing: border-box;
+  padding: 3px 5px; border: 1px solid var(--accent);
+  border-radius: 5px; background: #111; color: var(--accent);
+  font-size: 13px; font-weight: 700; text-align: center;
+  outline: none;
+}
 
 /* Prodotto — nome e codici */
 .ord-td-desc { min-width:120px; }

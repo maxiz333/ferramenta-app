@@ -15,6 +15,20 @@
 var CARTK='cp4_carrelli', ORDK='cp4_ordini', CART_CK='cp4_carrelli_cestino';
 var carrelli=lsGet(CARTK)||[], ordini=lsGet(ORDK)||[];
 var carrelliCestino=lsGet(CART_CK)||[];
+// Pulizia giornaliera: rimuovi carrelli creati prima di oggi (tranne inviati/modifica)
+(function(){
+  var oggi=new Date().toISOString().slice(0,10);
+  var prima=carrelli.length;
+  carrelli=carrelli.filter(function(c){
+    if(c.stato==='inviato'||c.stato==='modifica') return true;
+    var cData='';
+    if(c.creatoAtISO) cData=c.creatoAtISO.slice(0,10);
+    else if(c.dataCreazione) cData=new Date(c.dataCreazione).toISOString().slice(0,10);
+    if(!cData) return true;
+    return cData>=oggi;
+  });
+  if(carrelli.length<prima){ lsSet(CARTK,carrelli); }
+})();
 var activeCartId=carrelli.length?carrelli[carrelli.length-1].id:null;
 var ordFiltro='nuovo';
 
@@ -289,6 +303,7 @@ function confirmNewCart(){
   carrelli.push({id:id,nome:nome||('Cliente '+(carrelli.length+1)),
     createdAt:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),
     dataCreazione:Date.now(),
+    creatoAtISO:new Date().toISOString(),
     items:[],
     scontoGlobale:sconto||null});
   activeCartId=id;
@@ -915,55 +930,25 @@ function getStoricoCliente(nomeCliente){
 //  Card: nome a capo | codici 14px | prezzo blu/verde | qty interi
 // =============================================================================
 function renderCartTabs(){
-  var bar  = document.getElementById('cart-tabs-bar');
   var body = document.getElementById('cart-body');
-  if(!bar || !body) return;
+  if(!body) return;
 
-  // ── TESTATA: 3 righe separate nel wrapper ─────────────────────────────────
-  // Cerca o crea il wrapper testata (#ct-header-wrap) prima di #cart-tabs-bar
+  // ── TESTATA: riga unica nel wrapper (struttura già in HTML) ────────────
   var wrap = document.getElementById('ct-header-wrap');
-  if(!wrap){
-    wrap = document.createElement('div');
-    wrap.id = 'ct-header-wrap';
-    bar.parentNode.insertBefore(wrap, bar);
-  }
-
-  // Riga unica: ORDINI + CLIENTI + NUOVO
   var row1 = document.getElementById('ct-row-ordini');
-  if(!row1){ row1 = document.createElement('div'); row1.id = 'ct-row-ordini'; row1.className = 'ct-header-row ct-header-row--compact'; wrap.appendChild(row1); }
+
+  // Rimuovi vecchia riga 2 se esiste (legacy)
+  var oldRow2 = document.getElementById('ct-row-azioni');
+  if(oldRow2) oldRow2.remove();
+
+  // Riga unica: NUOVO + CLIENTI + ORDINI (in ordine di importanza)
   var nCl = carrelli.length;
   row1.innerHTML =
-    '<button id="ct-btn-ordfor" onclick="goTab(\'t-ordfor\');renderOrdFor()" title="Ordini per fornitore">📦 ORDINI</button>' +
+    '<button class="ct-pill--new" onclick="newCart()">＋ NUOVO</button>' +
     '<button id="ct-btn-clienti" onclick="ctApriClienti()" title="Scegli cliente">' +
       '👥 CLIENTI' + (nCl ? ' <span class="ct-pill-n">' + nCl + '</span>' : '') +
     '</button>' +
-    '<button class="ct-pill ct-pill--new" onclick="newCart()">＋ NUOVO</button>';
-
-  // Riga 3: pillole nomi (scroll laterale)
-  // Le pillole vivono nel bar originale — lo sposto dentro il wrapper
-  if(bar.parentNode !== wrap){ wrap.appendChild(bar); }
-  bar.className = 'ct-header-row ct-header-row--pills';
-  // Svuota inline style che potrebbe bloccare il layout
-  bar.removeAttribute('style');
-
-  // Popola pillole
-  var pillsHtml = '';
-  carrelli.forEach(function(cart, ci){
-    var active = cart.id === activeCartId;
-    var n      = (cart.items||[]).length;
-    var isInv  = cart.stato === 'inviato';
-    var isMod  = cart.stato === 'modifica';
-    var icon   = isInv ? '✅ ' : isMod ? '✏️ ' : '';
-    var cls    = 'ct-pill' + (active ? ' active' : '') + (isMod ? ' ct-pill--mod' : '');
-    pillsHtml +=
-      '<button class="' + cls + '" ' +
-        'onclick="switchCart(' + ci + ')" ' +
-        'ondblclick="event.stopPropagation();rinominaCart(' + ci + ')">' +
-        icon + esc(cart.nome) +
-        (n ? '<span class="ct-pill-n">' + n + '</span>' : '') +
-      '</button>';
-  });
-  bar.innerHTML = pillsHtml;
+    '<button id="ct-btn-ordfor" onclick="goTab(\'t-ordfor\');renderOrdFor()" title="Ordini per fornitore">📦 ORDINI</button>';
 
   // ── DROPDOWN CLIENTI (creato una sola volta nel body) ─────────────────────
   if(!document.getElementById('ct-clienti-dropdown')){
@@ -1024,19 +1009,18 @@ function renderCartTabs(){
     return;
   }
 
-  // ── BANNER MODIFICA ───────────────────────────────────────────────────────
+  // ── BANNER MODIFICA — striscia sottile ─────────────────────────────────
   if(cart.stato === 'modifica'){
     h += '<div class="ct-banner-mod">';
-    h += '<span style="font-size:18px">✏️</span>';
-    h += '<div style="flex:1"><div class="ct-banner-mod-title">MODIFICA IN CORSO</div>';
-    h += '<div style="font-size:10px;color:#888">' + esc(cart.nome) + ' — modifica e premi Aggiorna</div></div>';
+    h += '<span style="font-size:13px">✏️</span>';
+    h += '<span class="ct-banner-mod-title">' + esc(cart.nome) + ' — MODIFICA</span>';
     h += '</div>';
   }
 
-  // ── BARRA CERCA ──────────────────────────────────────────────────────────
+  // ── BARRA CERCA — compatta ──────────────────────────────────────────────
   h += '<div id="cart-action-btns">';
   h += '<button class="ct-btn-cerca" onclick="openCodeNumpad()">';
-  h += '<span class="ct-btn-icon">🔍</span><span>CERCA PER CODICE</span></button></div>';
+  h += '🔍 CERCA PER CODICE</button></div>';
   h += '<div id="cart-search-wrap">';
   h += '<input type="text" id="cart-search" placeholder="🔎 Cerca per nome, specifiche..." ';
   h += 'style="width:100%;padding:10px 14px;border:1px solid #2e3033;border-radius:10px;font-size:13px;background:#1e1e1e;color:#f0f0f0;box-sizing:border-box" ';
@@ -1152,8 +1136,8 @@ function renderCartTabs(){
         hasSconto   = prezOrigNum > prezFinNum + 0.005;
       }
       if(hasSconto){
-        h += '<div class="ct-old--orig" style="font-size:11px">€' + prezOrigNum.toFixed(2) + '</div>';
-        h += '<div class="ct-sub--final" style="font-size:13px">€' + p.toFixed(2) + '</div>';
+        h += '<div class="ct-old--orig">€' + prezOrigNum.toFixed(2) + '</div>';
+        h += '<div class="ct-sub--final">€' + p.toFixed(2) + '</div>';
       } else {
         h += '<div style="font-size:13px;font-weight:900;color:#999">€' + p.toFixed(2) + '</div>';
       }
@@ -1166,8 +1150,8 @@ function renderCartTabs(){
       // Colonna totale
       h += '<div class="ord-gc-sub">';
       if(hasSconto){
-        h += '<div class="ct-old--orig" style="font-size:11px">€' + (prezOrigNum * q).toFixed(2) + '</div>';
-        h += '<div class="ct-sub--final" style="font-size:14px">€' + sub + '</div>';
+        h += '<div class="ct-old--orig">€' + (prezOrigNum * q).toFixed(2) + '</div>';
+        h += '<div class="ct-sub--final">€' + sub + '</div>';
       } else {
         var subColor = isTuttoRotolo ? '#fc8181' : (isFR ? '#f6ad55' : 'var(--accent)');
         h += '<div style="font-size:14px;font-weight:900;color:' + subColor + '">€' + sub + '</div>';
@@ -1176,42 +1160,36 @@ function renderCartTabs(){
 
       h += '</div>'; // fine ord-grid row
 
-      // ── ICONBAR: SCONTI(menu) | Note | Ordina | Cestino ───────────────────
+      // ── ICONBAR: Forbici+% | Note | Ordina | Cestino ─────────────────────
       h += '<div class="ct-iconbar">';
 
-      // MENU SCONTI — collassabile
-      var scontiOpen = _ctScontiMenuState[cart.id + '-' + idx] || false;
-      var hasScontoAttivo = scOn || isTuttoRotolo || (it._scontoApplicato && it._scontoApplicato > 0) || scagAtt;
-      h += '<button class="ct-icon-btn ct-icon-btn--sconti' +
-           (hasScontoAttivo ? ' ct-icon-btn--on' : '') + '" ' +
-           'onclick="ctToggleScontiMenu(\'' + cart.id + '\',' + idx + ')">';
+      // FORBICI (tap=scampolo, doppio tap=rotolo) + input % inline
+      var forbLbl = isTuttoRotolo ? 'ROTOLO' : (scOn ? (isFR ? 'ROTOLO' : 'SCAMPOLO') : '');
+      h += '<div class="ct-forbici-row">';
+      h += '<button class="ct-icon-btn' +
+           (scOn||isTuttoRotolo ? ' ct-icon-btn--on' : '') +
+           (isTuttoRotolo ? ' ct-icon-btn--rotolo' : '') + '" ' +
+           'onclick="ctForbiciTap(\'' + cart.id + '\',' + idx + ')" ' +
+           'title="Tap: scampolo | 2 tap rapidi: TUTTO IL ROTOLO">';
       h += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-           '<line x1="19" y1="5" x2="5" y2="19"/>' +
-           '<circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>';
-      h += '<span>SCONTI</span></button>';
-
-      if(scontiOpen){
-        var forbLbl = isTuttoRotolo ? 'ROTOLO' : (scOn ? (isFR ? 'ROTOLO' : 'SCAMPOLO') : '');
-        h += '<button class="ct-icon-btn' +
-             (scOn||isTuttoRotolo ? ' ct-icon-btn--on' : '') +
-             (isTuttoRotolo ? ' ct-icon-btn--rotolo' : '') + '" ' +
-             'onclick="ctForbiciTap(\'' + cart.id + '\',' + idx + ')" ' +
-             'title="Tap: scampolo | 2 tap rapidi: TUTTO IL ROTOLO">';
-        h += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-             '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>' +
-             '<line x1="20" y1="4" x2="8.12" y2="15.88"/>' +
-             '<line x1="14.47" y1="14.48" x2="20" y2="20"/>' +
-             '<line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>';
-        h += (forbLbl ? '<span>' + forbLbl + '</span>' : '<span>FORBICI</span>') + '</button>';
-
-        var hasScag = scagAp || scagAtt;
-        h += '<button class="ct-icon-btn' + (hasScag ? ' ct-icon-btn--on' : '') + '" ' +
-             'onclick="ctTogglePanel(\'' + cart.id + '\',' + idx + ',\'sconto\')" title="Sconto / Scaglioni">';
-        h += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-             '<line x1="19" y1="5" x2="5" y2="19"/>' +
-             '<circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>';
-        h += '<span>%</span></button>';
+           '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>' +
+           '<line x1="20" y1="4" x2="8.12" y2="15.88"/>' +
+           '<line x1="14.47" y1="14.48" x2="20" y2="20"/>' +
+           '<line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>';
+      h += (forbLbl ? '<span>' + forbLbl + '</span>' : '<span>FORBICI</span>') + '</button>';
+      // Input % sempre visibile accanto
+      var scAtt = it._scontoApplicato || 0;
+      h += '<div class="ct-sc-inline">';
+      h += '<input type="number" min="0" max="100" value="' + (scAtt || '') + '" placeholder="%" class="ct-sc-inp" ' +
+           'onchange="cartSetScontoScampolo(\'' + cart.id + '\',' + idx + ',this.value)" ' +
+           'onclick="event.stopPropagation();this.select()">';
+      h += '<span class="ct-sc-pct">%</span>';
+      if(scAtt > 0){
+        var risparmio = (parsePriceIT(it._prezzoOriginale||it._prezzoBase||it.prezzoUnit) * q * scAtt / 100).toFixed(2);
+        h += '<span class="ct-sc-risp">-€' + risparmio + '</span>';
       }
+      h += '</div>';
+      h += '</div>';
 
       // NOTE
       h += '<button class="ct-icon-btn' + (hasNota ? ' ct-icon-btn--on' : '') + '" ' +
@@ -1245,50 +1223,8 @@ function renderCartTabs(){
       h += '</div>'; // fine ct-iconbar
 
       // ── PANNELLI A COMPARSA ───────────────────────────────────────────────
-      var pScId = 'ctp-sc-' + idx;
       var pNoId = 'ctp-no-' + idx;
-
-      // Pannello SCONTO — input numerico con ricalcolo LIVE (oninput)
       var _pKey = cart.id + '-' + idx;
-      var scPanelOpen = _ctPanelState[_pKey] === 'sconto';
-      h += '<div id="' + pScId + '" class="ct-panel" style="display:' + (scPanelOpen ? 'block' : 'none') + '">';
-      var pBase4sc = it._prezzoOriginale || it._prezzoBase || it.prezzoUnit || '0';
-      var scAtt4sc = it._scontoApplicato || 0;
-      var fin4sc   = scAtt4sc > 0
-        ? (parsePriceIT(pBase4sc)*(1-scAtt4sc/100)*q).toFixed(2)
-        : (parsePriceIT(pBase4sc)*q).toFixed(2);
-      h += '<div class="ct-panel-row">';
-      h += '<label class="ct-pl">Sconto %</label>';
-      // oninput → ricalcolo LIVE, onchange → salva nel dato
-      h += '<input type="number" min="0" max="100" value="' + scAtt4sc + '" class="ct-pi" ' +
-           'oninput="ctCalcolaLive(this,' + idx + ',\'' + pBase4sc + '\',' + q + ')" ' +
-           'onchange="cartSetScontoScampolo(\'' + cart.id + '\',' + idx + ',this.value)">';
-      h += '</div>';
-      // Preview BLU → VERDE
-      h += '<div class="ct-panel-preview" id="pp-sc-' + idx + '">';
-      h += '<span class="ct-pp-orig">Orig: €' + (parsePriceIT(pBase4sc)*q).toFixed(2) + '</span>';
-      h += '<span class="ct-pp-fin">Fin: €' + fin4sc + '</span>';
-      h += '</div>';
-      // Scaglioni (se presenti)
-      if(it.hasScaglioni || hasScag){
-        var baseP    = it._prezzoBase || it.prezzoUnit || '0';
-        var basePNum = parsePriceIT(baseP) || 0;
-        h += '<div style="font-size:10px;color:#63b3ed;margin:6px 0 5px">📊 Scaglioni — base €' + esc(baseP) + '</div>';
-        (it.scaglioni||[]).forEach(function(sg, si){
-          var pc = basePNum > 0 && sg.sconto ? (basePNum*(1-sg.sconto/100)).toFixed(2) : '';
-          h += '<div class="ct-scag-row">';
-          h += '<span class="ct-pl">da</span>';
-          h += '<input type="number" min="1" value="' + (sg.qtaMin||'') + '" class="ct-si" ' +
-               'onchange="cartUpdScag(\'' + cart.id + '\',' + idx + ',' + si + ',\'qtaMin\',this.value)"> pz —';
-          h += '<input type="number" min="0" max="100" value="' + (sg.sconto||'') + '" class="ct-si ct-si--pct" ' +
-               'onchange="cartUpdScag(\'' + cart.id + '\',' + idx + ',' + si + ',\'sconto\',this.value)">%';
-          if(pc) h += '<span class="ct-scag-res">€' + pc + '</span>';
-          h += '<button class="ct-scag-del" onclick="cartRmvScag(\'' + cart.id + '\',' + idx + ',' + si + ')">✕</button>';
-          h += '</div>';
-        });
-        h += '<button class="ct-scag-add" onclick="cartAddScag(\'' + cart.id + '\',' + idx + ')">+ scaglione</button>';
-      }
-      h += '</div>'; // fine pannello sconto
 
       // Pannello NOTE
       var notaPanelOpen = _ctPanelState[_pKey] === 'nota';
@@ -1305,9 +1241,7 @@ function renderCartTabs(){
 
       // Badge stati attivi
       var badges = '';
-      if(isTuttoRotolo) badges += '<span class="ct-badge ct-badge--red">🔴 ROTOLO INTERO</span> ';
-      else if(scOn && it._scontoApplicato) badges += '<span class="ct-badge ct-badge--yellow">' +
-        (isFR?'🔚':'✂️') + ' -' + it._scontoApplicato + '%</span> ';
+      if(isTuttoRotolo) badges += '<span class="ct-badge ct-badge--red">ROTOLO INTERO</span> ';
       if(scagAtt) badges += '<span class="ct-badge ct-badge--blue">📊 -'+(scagAtt.sconto||0)+'% da '+scagAtt.qtaMin+'pz</span> ';
       if(isDaOrd){
         var bc = it._ordColore || '#e53e3e';
@@ -1372,42 +1306,36 @@ function ctChiudiClienti(){
 function ctRenderClientiList(){
   var list = document.getElementById('ct-clienti-list');
   if(!list) return;
-  if(!carrelli.length){
-    list.innerHTML = '<div style="text-align:center;color:#555;padding:20px;font-size:13px;">Nessun cliente.<br>Premi ＋ NUOVO per iniziare.</div>';
-    return;
-  }
-  // Raggruppa per giorno (da dataCreazione)
-  var byDay = {};
-  var oggi  = new Date();
+
+  // Filtra solo carrelli di oggi
+  var oggiStr = new Date().toISOString().slice(0,10);
+  var carrelliOggi = [];
   carrelli.forEach(function(cart, ci){
-    var label = 'Altro';
-    if(cart.dataCreazione){
-      var d    = new Date(cart.dataCreazione);
-      var diff = Math.floor((oggi - d) / 86400000);
-      if(diff === 0)     label = 'Oggi — ' + _gg[d.getDay()];
-      else if(diff === 1) label = 'Ieri — ' + _gg[d.getDay()];
-      else if(diff < 7)   label = _gg[d.getDay()] + ' (' + diff + ' gg fa)';
-      else                label = d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'});
+    var cData = '';
+    if(cart.creatoAtISO) cData = cart.creatoAtISO.slice(0,10);
+    else if(cart.dataCreazione) cData = new Date(cart.dataCreazione).toISOString().slice(0,10);
+    if(cData === oggiStr || cart.stato === 'inviato' || cart.stato === 'modifica'){
+      carrelliOggi.push({cart:cart, ci:ci});
     }
-    if(!byDay[label]) byDay[label] = [];
-    byDay[label].push({cart:cart, ci:ci});
   });
 
+  if(!carrelliOggi.length){
+    list.innerHTML = '<div style="text-align:center;color:#555;padding:20px;font-size:13px;">Nessun cliente oggi.<br>Premi ＋ NUOVO per iniziare.</div>';
+    return;
+  }
+
   var h = '';
-  Object.keys(byDay).forEach(function(day){
-    h += '<div class="ct-clienti-day">' + esc(day) + '</div>';
-    byDay[day].forEach(function(item){
-      var cart     = item.cart;
-      var ci       = item.ci;
-      var n        = (cart.items||[]).length;
-      var isActive = cart.id === activeCartId;
-      var stato    = cart.stato === 'inviato' ? '✅ ' : cart.stato === 'modifica' ? '✏️ ' : '';
-      h += '<button class="ct-clienti-btn' + (isActive ? ' active' : '') + '" ' +
-           'onclick="ctSelezionaCliente(' + ci + ')">' +
-           '<span>' + stato + esc(cart.nome || '—') + '</span>' +
-           (n ? '<span class="ct-clienti-n">' + n + ' art.</span>' : '') +
-           '</button>';
-    });
+  carrelliOggi.forEach(function(item){
+    var cart     = item.cart;
+    var ci       = item.ci;
+    var n        = (cart.items||[]).length;
+    var isActive = cart.id === activeCartId;
+    var stato    = cart.stato === 'inviato' ? '✅ ' : cart.stato === 'modifica' ? '✏️ ' : '';
+    h += '<button class="ct-clienti-btn' + (isActive ? ' active' : '') + '" ' +
+         'onclick="ctSelezionaCliente(' + ci + ')">' +
+         '<span>' + stato + esc(cart.nome || '—') + '</span>' +
+         (n ? '<span class="ct-clienti-n">' + n + ' art.</span>' : '') +
+         '</button>';
   });
   list.innerHTML = h;
 }
@@ -1801,8 +1729,8 @@ function ctCalcolaLive(inputEl, idx, baseStr, qty){
       if(finEl)  finEl.textContent  = '€' + finale.toFixed(2);
       // Se non esistono ancora (era prezzo normale), riscrivi
       if(!origEl && !finEl){
-        przEl.innerHTML = '<div class="ct-old--orig" style="font-size:11px">€' + base.toFixed(2) + '</div>' +
-          '<div class="ct-sub--final" style="font-size:13px">€' + finale.toFixed(2) + '</div>' +
+        przEl.innerHTML = '<div class="ct-old--orig">€' + base.toFixed(2) + '</div>' +
+          '<div class="ct-sub--final">€' + finale.toFixed(2) + '</div>' +
           przEl.querySelector('.ct-punit').outerHTML;
       }
     }
@@ -1811,8 +1739,8 @@ function ctCalcolaLive(inputEl, idx, baseStr, qty){
   if(przEl && przEl.nextElementSibling){
     var totCell = przEl.nextElementSibling;
     if(perc > 0 && base > finale + 0.005){
-      totCell.innerHTML = '<div class="ct-old--orig" style="font-size:11px">€' + (base*q).toFixed(2) + '</div>' +
-        '<div class="ct-sub--final" style="font-size:14px">€' + (finale*q).toFixed(2) + '</div>';
+      totCell.innerHTML = '<div class="ct-old--orig">€' + (base*q).toFixed(2) + '</div>' +
+        '<div class="ct-sub--final">€' + (finale*q).toFixed(2) + '</div>';
     } else {
       totCell.innerHTML = '<div style="font-size:14px;font-weight:900;color:var(--accent)">€' + (finale*q).toFixed(2) + '</div>';
     }
@@ -2277,6 +2205,58 @@ function salvaEditOrdine(){
 }
 function chiudiEditOrdine(){document.getElementById('edit-ord-overlay').style.display='none';_editOrdIdx=null;_editOrdItems=null;}
 
+// --- INLINE EDIT ORDINI (doppio click su cella) ----------------
+function ordInlineEdit(el, gi, ii, field){
+  if(el.querySelector('input')) return; // già in editing
+  var ord = ordini[gi];
+  if(!ord || !ord.items[ii]) return;
+  var it = ord.items[ii];
+  var oldVal = '';
+  var inputType = 'text';
+  if(field === 'qty'){ oldVal = parseFloat(it.qty)||0; inputType = 'number'; }
+  else if(field === 'price'){ oldVal = it.prezzoUnit || ''; inputType = 'text'; }
+  else if(field === 'codF'){ oldVal = it.codF || ''; }
+
+  var inp = document.createElement('input');
+  inp.type = inputType;
+  inp.value = oldVal;
+  inp.className = 'ord-inline-input';
+  if(field === 'qty'){ inp.min = '0.5'; inp.step = '0.5'; }
+  el.textContent = '';
+  el.appendChild(inp);
+  inp.focus();
+  inp.select();
+
+  function save(){
+    var v = inp.value.trim();
+    if(field === 'qty'){
+      var nq = parseFloat(v);
+      if(!nq || nq <= 0) nq = parseFloat(it.qty)||1;
+      it.qty = nq;
+    } else if(field === 'price'){
+      if(v) it.prezzoUnit = v;
+    } else if(field === 'codF'){
+      it.codF = v;
+    }
+    // Ricalcola totale
+    var tot = ord.items.reduce(function(s,x){ return s + parsePriceIT(x.prezzoUnit)*parseFloat(x.qty||0); },0);
+    ord.totale = tot.toFixed(2);
+    ord.modificato = true;
+    ord.modificatoAt = new Date().toLocaleString('it-IT');
+    ord.modificatoAtISO = new Date().toISOString();
+    saveOrdini();
+    // Aggiorna carrello collegato
+    var linkedCart = carrelli.find(function(c){ return c.ordId === ord.id; });
+    if(linkedCart){ linkedCart.items = JSON.parse(JSON.stringify(ord.items)); saveCarrelli(); }
+    renderOrdini();
+  }
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); inp.blur(); }
+    if(e.key === 'Escape'){ inp.value = oldVal; inp.blur(); }
+  });
+}
+
 // --- ORDINI ---------------------------------------------------
 function filterOrdini(f){
   // Se siamo nella vista "da ordinare", chiuderla
@@ -2531,27 +2511,55 @@ function renderOrdini(){
         var q=parseFloat(it.qty||0);
         var sub=(pu*q).toFixed(2);
 
+        // Calcola se c'è sconto attivo
+        var prezOrigNum=0;
+        var prezFinNum=pu;
+        var hasSconto=false;
+        var scOn=it.scampolo||it.fineRotolo||false;
+        var scagAtt=it._scaglioneAttivo||null;
+        if(scagAtt && it._prezzoBase){
+          prezOrigNum=parsePriceIT(it._prezzoBase);
+          hasSconto=prezOrigNum>prezFinNum+0.005;
+        } else if((scOn||(it._scontoApplicato&&it._scontoApplicato>0))&&it._prezzoOriginale){
+          prezOrigNum=parsePriceIT(it._prezzoOriginale);
+          hasSconto=prezOrigNum>prezFinNum+0.005;
+        }
+
         h+='<div class="ord-grid ord-grid-row'+(ii%2===0?' ord-grid-even':' ord-grid-odd')+'">';
 
-        // Colonna prodotto: nome + codici sotto
+        // Colonna prodotto: nome + codici sotto (codF editabile con dblclick)
         h+='<div class="ord-gc-desc">';
         h+='<div class="ord-item-name">'+esc(it.desc||'—')+'</div>';
         var codes='';
         if(it.codM) codes+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
-        if(it.codF) codes+='<span class="ord-code-forn">'+esc(it.codF)+'</span>';
-        if(codes) h+='<div class="ord-item-codes">'+codes+'</div>';
+        codes+='<span class="ord-code-forn ord-editable" ondblclick="ordInlineEdit(this,'+gi+','+ii+',\'codF\')" title="Doppio click per modificare">'+esc(it.codF||'—')+'</span>';
+        h+='<div class="ord-item-codes">'+codes+'</div>';
         if(it.nota) h+='<div class="ord-item-nota">📝 '+esc(it.nota)+'</div>';
         if(it.daOrdinare) h+='<div class="ord-item-daord">🚚 DA ORDINARE</div>';
         h+='</div>';
 
-        // Quantità
-        h+='<div class="ord-gc-qty">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
+        // Quantità — dblclick per editare
+        h+='<div class="ord-gc-qty ord-editable" ondblclick="ordInlineEdit(this,'+gi+','+ii+',\'qty\')" title="Doppio click per modificare">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
 
-        // Prezzo unitario
-        h+='<div class="ord-gc-price">€'+pu.toFixed(2)+'</div>';
+        // Prezzo unitario — con sconto sbarrato se presente
+        h+='<div class="ord-gc-price ord-editable" ondblclick="ordInlineEdit(this,'+gi+','+ii+',\'price\')" title="Doppio click per modificare">';
+        if(hasSconto){
+          h+='<div class="ct-old--orig">€'+prezOrigNum.toFixed(2)+'</div>';
+          h+='<div class="ct-sub--final">€'+pu.toFixed(2)+'</div>';
+        } else {
+          h+='€'+pu.toFixed(2);
+        }
+        h+='</div>';
 
-        // Subtotale
-        h+='<div class="ord-gc-sub">€'+sub+'</div>';
+        // Subtotale — con sconto sbarrato se presente
+        h+='<div class="ord-gc-sub">';
+        if(hasSconto){
+          h+='<div class="ct-old--orig">€'+(prezOrigNum*q).toFixed(2)+'</div>';
+          h+='<div class="ct-sub--final">€'+sub+'</div>';
+        } else {
+          h+='€'+sub;
+        }
+        h+='</div>';
 
         h+='</div>';
       });
@@ -2574,7 +2582,6 @@ function renderOrdini(){
       h+='<button onclick="openCassa('+gi+')" class="ord-abtn ord-abtn--cassa">💰 Cassa</button>';
       h+='</div>';
       h+='<div class="ord-actions ord-actions-sec">';
-      h+='<button onclick="modificaOrdineDaTab('+gi+')" class="ord-abtn ord-abtn--edit">✏️ Modifica</button>';
       h+='<button onclick="stampaRicevuta(ordini['+gi+'].items,ordini['+gi+'].nomeCliente,ordini['+gi+'].totale,ordini['+gi+'].nota)" class="ord-abtn ord-abtn--print">🖨️ Stampa</button>';
       if(ost!=='lavorazione') h+='<button onclick="setStatoOrdine('+gi+',\'lavorazione\')" class="ord-abtn ord-abtn--wip">⏳ In corso</button>';
       if(ost!=='pronto') h+='<button onclick="setStatoOrdine('+gi+',\'pronto\')" class="ord-abtn ord-abtn--ready">📦 Pronto</button>';
@@ -2623,42 +2630,50 @@ function startAutoRefresh(){
 function updateOrdCounter(){
   var banner=document.getElementById('ord-counter-banner');
   if(!banner)return;
-  var nuovi=ordini.filter(function(o){return o.stato==='nuovo';}).length;
-  var inCorso=ordini.filter(function(o){return o.stato==='lavorazione';}).length;
-  var pronti=ordini.filter(function(o){return o.stato==='pronto';}).length;
-  if(nuovi===0&&inCorso===0&&pronti===0){
+
+  // Mostra solo il contatore dello stato filtrato attivo
+  var count=0;
+  var label='';
+  var color='';
+  var bg='';
+  var border='';
+  var icon='';
+
+  if(ordFiltro==='nuovo'){
+    count=ordini.filter(function(o){return o.stato==='nuovo';}).length;
+    label='Nuov'+(count===1?'o':'i'); icon='🆕'; color='var(--accent)'; bg='linear-gradient(135deg,#1a1a00,#2a2a00)'; border='2px solid var(--accent)';
+  } else if(ordFiltro==='lavorazione'){
+    count=ordini.filter(function(o){return o.stato==='lavorazione';}).length;
+    label='In corso'; icon='⏳'; color='#63b3ed'; bg='#0d1a2a'; border='1px solid #3182ce44';
+  } else if(ordFiltro==='pronto'){
+    count=ordini.filter(function(o){return o.stato==='pronto';}).length;
+    label='Pront'+(count===1?'o':'i'); icon='📦'; color='#f6ad55'; bg='#1a1500'; border='1px solid #dd6b2044';
+  } else if(ordFiltro==='completato'){
+    count=ordini.filter(function(o){return o.stato==='completato';}).length;
+    label='Fatt'+(count===1?'o':'i'); icon='✅'; color='#68d391'; bg='#0d1a0d'; border='1px solid #38a16944';
+  } else {
+    // "tutti" — nessun contatore
+    banner.style.display='none';
+    var fc=document.getElementById('ord-filter-count');
+    if(fc){ fc.textContent=ordini.length; }
+    return;
+  }
+
+  if(count===0){
     banner.style.display='none';
   } else {
     banner.style.display='block';
-    var h='<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-    if(nuovi>0){
-      h+='<div class="ord-counter-pulse" style="background:linear-gradient(135deg,#1a1a00,#2a2a00);border:2px solid var(--accent);border-radius:12px;padding:12px 16px;text-align:center;flex:1;min-width:80px;">';
-      h+='<div style="font-size:28px;font-weight:900;color:var(--accent);">'+nuovi+'</div>';
-      h+='<div style="font-size:10px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.5px;">🆕 Nuov'+(nuovi===1?'o':'i')+'</div>';
-      h+='</div>';
-    }
-    if(inCorso>0){
-      h+='<div style="background:#0d1a2a;border:1px solid #3182ce44;border-radius:12px;padding:12px 16px;text-align:center;flex:1;min-width:80px;">';
-      h+='<div style="font-size:28px;font-weight:900;color:#63b3ed;">'+inCorso+'</div>';
-      h+='<div style="font-size:10px;color:#63b3ed;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">⏳ In corso</div>';
-      h+='</div>';
-    }
-    if(pronti>0){
-      h+='<div style="background:#1a1500;border:1px solid #dd6b2044;border-radius:12px;padding:12px 16px;text-align:center;flex:1;min-width:80px;">';
-      h+='<div style="font-size:28px;font-weight:900;color:#f6ad55;">'+pronti+'</div>';
-      h+='<div style="font-size:10px;color:#f6ad55;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">📦 Pront'+(pronti===1?'o':'i')+'</div>';
-      h+='</div>';
-    }
-    h+='</div>';
-    banner.innerHTML=h;
+    banner.innerHTML=
+      '<div style="display:flex;justify-content:center;">' +
+      '<div style="background:'+bg+';border:'+border+';border-radius:12px;padding:10px 24px;text-align:center;min-width:100px;">' +
+      '<div style="font-size:28px;font-weight:900;color:'+color+';">'+count+'</div>' +
+      '<div style="font-size:10px;color:'+color+';font-weight:700;text-transform:uppercase;letter-spacing:.5px;">'+icon+' '+label+'</div>' +
+      '</div></div>';
   }
 
   // Contatore filtrato accanto al titolo
   var fc=document.getElementById('ord-filter-count');
   if(fc){
-    var count=0;
-    if(ordFiltro==='tutti') count=ordini.length;
-    else count=ordini.filter(function(o){return o.stato===ordFiltro;}).length;
     fc.textContent=count;
   }
 }
@@ -6566,12 +6581,23 @@ function ct_svuota(){
 
 function ct_genAnteprima(){
   if(!ctRows.length){ showToastGen('red','⚠️ Nessun cartellino'); return; }
-  // Genera anteprima usando ctRows come sorgente temporanea
-  var backup = rows;
-  rows = ctRows;
-  if(typeof genTags==='function') genTags();
-  if(typeof showPrev==='function') showPrev();
-  rows = backup;
+  // Carica e applica le impostazioni editor
+  var savedEd = lsGet('cp4_editor', null);
+  if(savedEd && typeof editorSettings !== 'undefined') Object.assign(editorSettings, savedEd);
+  if(typeof applyEditorCSS==='function') applyEditorCSS();
+  // Genera HTML direttamente da ctRows SENZA toccare rows/save
+  var html = buildTagsHTML(ctRows, false);
+  // Popola print-area per la stampa
+  var printArea = document.getElementById('print-area');
+  if(printArea) printArea.innerHTML = html;
+  var t1area = document.getElementById('print-area-t1');
+  if(t1area) t1area.innerHTML = html;
+  // Popola anteprima overlay
+  var pc = document.getElementById('pc');
+  if(pc) pc.innerHTML = html;
+  var pov = document.getElementById('pov');
+  if(pov) pov.classList.add('open');
+  if(typeof _scalePrevContainer==='function') _scalePrevContainer();
 }
 
 function ct_toggleCsv(){

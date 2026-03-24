@@ -646,7 +646,7 @@ body.light-mode #confirm-overlay > div { background:#fff; }
       <div id="ec-preview" style="background:#111;padding:10px;border-radius:8px;display:flex;flex-wrap:wrap;gap:4px;border:1px solid var(--border);"></div>
       <div style="margin-top:12px;">
         <button class="btn btn-green" onclick="window.print()">🖨️ Stampa</button>
-        <button class="btn btn-orange" onclick="showPrev()">👁️ Anteprima stampa</button>
+        <button class="btn btn-orange" onclick="ct_genAnteprima()">👁️ Anteprima stampa</button>
       </div>
     </div>
   </div>
@@ -955,20 +955,11 @@ body.light-mode #confirm-overlay > div { background:#fff; }
 <!-- TAB CARRELLO -->
 <div id="tc" class="tab-content">
 <div class="panel" style="padding:0;background:var(--ct-bg,#121212);">
-  <!-- Testata carrello: 3 righe fisse centrate max 600px -->
+  <!-- Testata carrello: riga unica compatta -->
   <div id="ct-header-wrap">
-    <!-- Riga 1: ORDINI centrato -->
-    <div id="ct-row-ordini" class="ct-header-row ct-header-row--ordini">
-      <button id="ct-btn-ordfor" onclick="goTab('t-ordfor');renderOrdFor()">📦 ORDINI FORNITORE</button>
-    </div>
-    <!-- Riga 2: CLIENTI + NUOVO -->
-    <div id="ct-row-azioni" class="ct-header-row ct-header-row--azioni">
-      <button id="ct-btn-clienti" onclick="ctApriClienti()">👥 CLIENTI</button>
-      <button class="ct-pill ct-pill--new" onclick="newCart()">＋ NUOVO</button>
-    </div>
-    <!-- Riga 3: pillole nomi clienti (scroll laterale) -->
-    <div id="cart-tabs-bar" class="ct-header-row ct-header-row--pills"></div>
+    <div id="ct-row-ordini" class="ct-header-row ct-header-row--compact"></div>
   </div>
+  <div id="cart-tabs-bar" style="display:none"></div>
   <div id="cart-body"></div>
 </div>
 </div>
