@@ -197,11 +197,9 @@ function _applicaSconto(perc){
   if(!cart||!(cart.items||[]).length)return;
   cart.scontoGlobale=perc;
   (cart.items||[]).forEach(function(it){
-    if(!it._prezzoOriginale)it._prezzoOriginale=it.prezzoUnit;
-    var base= parsePriceIT(it._prezzoOriginale||it.prezzoUnit);
-    var scontato=(base*(1-perc/100)).toFixed(2);
-    it.prezzoUnit=scontato;
+    it.scampolo=true;
     it._scontoApplicato=perc;
+    it._scontoTipo='globale';
   });
   saveCarrelli();
   renderCartTabs();
@@ -213,7 +211,10 @@ function rimuoviScontoGlobale(){
   if(!cart)return;
   delete cart.scontoGlobale;
   (cart.items||[]).forEach(function(it){
-    if(it._prezzoOriginale){it.prezzoUnit=it._prezzoOriginale;delete it._prezzoOriginale;delete it._scontoApplicato;}
+    if(it._scontoTipo==='globale'){
+      it.scampolo=false;it.fineRotolo=false;
+      delete it._scontoApplicato;delete it._scontoTipo;
+    }
   });
   saveCarrelli();
   renderCartTabs();
@@ -226,7 +227,7 @@ function condividiWhatsApp(items,nomeCliente,totale,nota){
   var msg='- *Ordine - '+esc(nomeCliente||'Cliente')+'*\n';
   msg+='- '+new Date().toLocaleDateString('it-IT')+'\n\n';
   items.forEach(function(it){
-    var sub=(parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0)).toFixed(2);
+    var sub=(_prezzoEffettivo(it)*parseFloat(it.qty||0)).toFixed(2);
     msg+=it.qty+' '+( it.unit||'pz')+' - '+(it.desc||'');
     if(it.codF)msg+=' ['+it.codF+']';
     msg+=' - -'+sub+'\n';
@@ -586,21 +587,27 @@ function cartSetUnit(cartId,idx,val){
   if(!cart||!cart.items[idx])return;
   cart.items[idx].unit=val;saveCarrelli();renderCartTabs();
 }
+
+// Helper: calcola prezzo effettivo (con sconto scampolo/rotolo se attivo)
+function _prezzoEffettivo(it){
+  var p=parsePriceIT(it.prezzoUnit);
+  var scOn=it.scampolo||it.fineRotolo;
+  var sc=it._scontoApplicato||0;
+  if(scOn&&sc>0) return p*(1-sc/100);
+  return p;
+}
 function cartCycleScampolo(cartId,idx){
   var cart=carrelli.find(function(c){return c.id===cartId;});
   if(!cart||!cart.items[idx])return;
   var it=cart.items[idx];
   if(!it.scampolo){
-    // niente → scampolo
-    if(!it._prezzoOriginale)it._prezzoOriginale=it.prezzoUnit;
+    // niente → scampolo ON
     it.scampolo=true;it.fineRotolo=false;
     it._scontoTipo='scampolo';
-    if(!it._scontoApplicato)it._scontoApplicato=30;
-    _applicaScontoScampolo(it);
+    if(!it._scontoApplicato) it._scontoApplicato=30;
   } else {
-    // scampolo → niente: ripristina prezzo
+    // scampolo → OFF
     it.scampolo=false;it.fineRotolo=false;
-    if(it._prezzoOriginale){it.prezzoUnit=it._prezzoOriginale;delete it._prezzoOriginale;}
     delete it._scontoTipo;delete it._scontoApplicato;
   }
   saveCarrelli();renderCartTabs();
@@ -610,15 +617,10 @@ function cartSetScontoScampolo(cartId,idx,val){
   if(!cart||!cart.items[idx])return;
   var it=cart.items[idx];
   it._scontoApplicato=parseFloat(val)||0;
-  _applicaScontoScampolo(it);
   saveCarrelli();renderCartTabs();
 }
 function _applicaScontoScampolo(it){
-  var sc=it._scontoApplicato||0;
-  if(sc>0&&it._prezzoOriginale){
-    var base=parsePriceIT(it._prezzoOriginale)||0;
-    it.prezzoUnit=(base*(1-sc/100)).toFixed(2);
-  }
+  // NON USATA PIU — lo sconto si calcola al volo nel render
 }
 function cartSetNota(cartId,idx,val){
   var cart=carrelli.find(function(c){return c.id===cartId;});
@@ -1003,7 +1005,7 @@ function renderCartTabs(){
   // ── STATO INVIATO (read-only) ─────────────────────────────────────────────
   if(cart.stato === 'inviato' && cart.locked){
     var totInv = (cart.items||[]).reduce(function(s,it){
-      return s + parsePriceIT(it.prezzoUnit) * parseFloat(it.qty||0);
+      return s + _prezzoEffettivo(it) * parseFloat(it.qty||0);
     }, 0);
     h += '<div class="ct-inviato-box">';
     h += '<div class="ct-inviato-top">';
@@ -1059,7 +1061,7 @@ function renderCartTabs(){
   } else {
 
     // ── TOTALE STICKY ─────────────────────────────────────────────────────
-    var tot     = (cart.items||[]).reduce(function(s,it){ return s + parsePriceIT(it.prezzoUnit) * parseFloat(it.qty||0); }, 0);
+    var tot     = (cart.items||[]).reduce(function(s,it){ return s + _prezzoEffettivo(it) * parseFloat(it.qty||0); }, 0);
     var scontoGl = cart.scontoGlobale;
     var totFin   = scontoGl ? tot * (1 - scontoGl/100) : tot;
     h += '<div class="ct-sticky-total">';
@@ -1083,7 +1085,6 @@ function renderCartTabs(){
     (cart.items||[]).forEach(function(it, idx){
       var p            = parsePriceIT(it.prezzoUnit);
       var q            = parseFloat(it.qty) || 0;
-      var sub          = (p * q).toFixed(2);
       var isSc         = it.scampolo    || false;
       var isFR         = it.fineRotolo  || false;
       var isDaOrd      = it.daOrdinare  || false;
@@ -1092,6 +1093,11 @@ function renderCartTabs(){
       var hasNota      = !!(it.nota && it.nota.trim());
       var scOn         = isSc || isFR;
       var isTuttoRotolo = it._tuttoRotolo || false;
+
+      // Prezzo scontato calcolato al volo
+      var scAttivo     = it._scontoApplicato || 0;
+      var pScontato    = (scOn && scAttivo > 0) ? p * (1 - scAttivo/100) : p;
+      var sub          = (pScontato * q).toFixed(2);
 
       // Cod. Magazzino — 7 cifre se numerico
       var codM7 = it.codM
@@ -1145,23 +1151,14 @@ function renderCartTabs(){
       h += '</select>';
       h += '</div>';
 
-      // Colonna prezzo — con blocco blu/verde e input editabile
+      // Colonna prezzo — prezzo base sempre visibile, scontato sotto se attivo
       h += '<div class="ord-gc-price" id="prz-' + idx + '">';
-      var prezOrigNum = 0;
-      var prezFinNum  = p;
-      var hasSconto   = false;
-      if(scagAtt && it._prezzoBase){
-        prezOrigNum = parsePriceIT(it._prezzoBase);
-        hasSconto   = prezOrigNum > prezFinNum + 0.005;
-      } else if((scOn || (it._scontoApplicato && it._scontoApplicato > 0)) && it._prezzoOriginale){
-        prezOrigNum = parsePriceIT(it._prezzoOriginale);
-        hasSconto   = prezOrigNum > prezFinNum + 0.005;
-      }
+      var hasSconto = scOn && scAttivo > 0 && pScontato < p - 0.005;
       if(hasSconto){
-        h += '<div class="ct-old--orig">€' + prezOrigNum.toFixed(2) + '</div>';
-        h += '<div class="ct-sub--final">€' + p.toFixed(2) + '</div>';
+        h += '<div class="ct-old--orig">€' + p.toFixed(2) + '</div>';
+        h += '<div class="ct-sub--final">€' + pScontato.toFixed(2) + '</div>';
       } else {
-        h += '<div style="font-size:13px;font-weight:900;color:#999">€' + p.toFixed(2) + '</div>';
+        h += '<div style="font-size:12px;font-weight:900;color:#999">€' + p.toFixed(2) + '</div>';
       }
       h += '<input class="ct-punit" type="text" inputmode="decimal" value="' +
            esc(it.prezzoUnit||'0') + '" ' +
@@ -1172,11 +1169,11 @@ function renderCartTabs(){
       // Colonna totale
       h += '<div class="ord-gc-sub">';
       if(hasSconto){
-        h += '<div class="ct-old--orig">€' + (prezOrigNum * q).toFixed(2) + '</div>';
+        h += '<div class="ct-old--orig">€' + (p * q).toFixed(2) + '</div>';
         h += '<div class="ct-sub--final">€' + sub + '</div>';
       } else {
         var subColor = isTuttoRotolo ? '#fc8181' : (isFR ? '#f6ad55' : 'var(--accent)');
-        h += '<div style="font-size:14px;font-weight:900;color:' + subColor + '">€' + sub + '</div>';
+        h += '<div style="font-size:13px;font-weight:900;color:' + subColor + '">€' + sub + '</div>';
       }
       h += '</div>';
 
@@ -1283,7 +1280,7 @@ function renderCartTabs(){
   h += '</div>';
 
   // ── STICKY FOOTER ─────────────────────────────────────────────────────────
-  var tot2    = (cart.items||[]).reduce(function(s,it){ return s + parsePriceIT(it.prezzoUnit) * parseFloat(it.qty||0); }, 0);
+  var tot2    = (cart.items||[]).reduce(function(s,it){ return s + _prezzoEffettivo(it) * parseFloat(it.qty||0); }, 0);
   var tot2Fin = cart.scontoGlobale ? tot2*(1-cart.scontoGlobale/100) : tot2;
   h += '<div id="cart-pos-footer">';
   h += '<div class="ct-footer">';
@@ -1293,12 +1290,12 @@ function renderCartTabs(){
   h += '<button class="ct-fbtn ct-fbtn--riepilogo" onclick="openRiepilogoOrdine(\'' + cart.id + '\')">👀<span>RIEPILOGO</span></button>';
   if(cart.stato === 'modifica'){
     h += '<button class="ct-fbtn ct-fbtn--cassa" id="ctf-cassa-' + cart.id + '" ' +
-         'onclick="ctCassaSingleClick(this)" ondblclick="aggiornaOrdine(\'' + cart.id + '\')">' +
+         'onclick="ctCassaSingleClick(this,\'aggiornaOrdine(\\x27' + cart.id + '\\x27)\')">' +
          '✏️<span>AGGIORNA</span></button>';
   } else {
     h += '<button class="ct-fbtn ct-fbtn--cassa" id="ctf-cassa-' + cart.id + '" ' +
          (!(cart.items||[]).length ? 'disabled ' : '') +
-         'onclick="ctCassaSingleClick(this)" ondblclick="inviaOrdine(\'' + cart.id + '\')">' +
+         'onclick="ctCassaSingleClick(this,\'inviaOrdine(\\x27' + cart.id + '\\x27)\')">' +
          '🛍️<span>CONFERMA</span></button>';
   }
   h += '</div>';
@@ -1455,11 +1452,8 @@ function ctTuttoRotolo(cartId, idx){
     if(it.nota === 'ROTOLO INTERO') it.nota = '';
     it.scampolo   = false;
     it.fineRotolo = false;
-    if(it._prezzoOriginale){
-      it.prezzoUnit = it._prezzoOriginale;
-      delete it._prezzoOriginale;
-    }
     delete it._scontoApplicato;
+    delete it._scontoTipo;
   } else {
     // Attiva ROTOLO INTERO
     it._tuttoRotolo     = true;
@@ -1468,7 +1462,6 @@ function ctTuttoRotolo(cartId, idx){
     it.fineRotolo       = true;
     it._scontoTipo      = 'rotolo';
     it._scontoApplicato = 0;
-    if(!it._prezzoOriginale) it._prezzoOriginale = it.prezzoUnit;
   }
   saveCarrelli();
   renderCartTabs();
@@ -1554,19 +1547,32 @@ function ctSetCodF(cartId, idx, val){
   }, 600);
 }
 
-// ctCassaSingleClick: protezione doppio click — singolo mostra avviso 1.5s
+// ctCassaSingleClick: doppio tap per conferma (Safari iOS compatibile)
 var _ctCassaTimer = null;
-function ctCassaSingleClick(btn){
-  if(_ctCassaTimer) return; // già in attesa: non stacca
-  btn.classList.add('ct-fbtn--warn');
-  var sp = btn.querySelector('span');
-  var orig = sp ? sp.textContent : '';
-  if(sp) sp.textContent = '⚠ Doppio click!';
-  _ctCassaTimer = setTimeout(function(){
+var _ctCassaPending = false;
+function ctCassaSingleClick(btn, action){
+  if(_ctCassaPending){
+    // SECONDO TAP — conferma!
+    clearTimeout(_ctCassaTimer);
+    _ctCassaPending = false;
     btn.classList.remove('ct-fbtn--warn');
-    if(sp) sp.textContent = orig;
-    _ctCassaTimer = null;
-  }, 1500);
+    var sp = btn.querySelector('span');
+    if(sp) sp.textContent = '✅ Invio...';
+    // Esegui l'azione (inviaOrdine o aggiornaOrdine)
+    if(action) setTimeout(function(){ eval(action); }, 100);
+  } else {
+    // PRIMO TAP — mostra avviso
+    _ctCassaPending = true;
+    btn.classList.add('ct-fbtn--warn');
+    var sp = btn.querySelector('span');
+    var orig = sp ? sp.textContent : '';
+    if(sp) sp.textContent = '⚠ Tocca di nuovo!';
+    _ctCassaTimer = setTimeout(function(){
+      btn.classList.remove('ct-fbtn--warn');
+      if(sp) sp.textContent = orig;
+      _ctCassaPending = false;
+    }, 2000);
+  }
 }
 
 // apriModalFoto: foto a tutto schermo — onclick su miniatura
@@ -1785,7 +1791,7 @@ function openRiepilogoOrdine(cartId){
   if(!ov){ ov = document.createElement('div'); ov.id = 'riepilogo-overlay'; document.body.appendChild(ov); }
   ov.className = 'overlay open';
 
-  var tot = (cart.items||[]).reduce(function(s,it){ return s + parsePriceIT(it.prezzoUnit) * parseFloat(it.qty||0); }, 0);
+  var tot = (cart.items||[]).reduce(function(s,it){ return s + _prezzoEffettivo(it) * parseFloat(it.qty||0); }, 0);
   var totFin = cart.scontoGlobale ? tot * (1 - cart.scontoGlobale/100) : tot;
   var checks = _riepilogoChecks[key];
   var checked = Object.keys(checks).filter(function(k){ return checks[k]; }).length;
@@ -1808,7 +1814,7 @@ function openRiepilogoOrdine(cartId){
   (cart.items||[]).forEach(function(it, idx){
     var isChecked = !!checks[idx];
     var codM7 = it.codM ? (String(it.codM).match(/^\d+$/) ? String(it.codM).padStart(7,'0') : it.codM) : '';
-    var sub = (parsePriceIT(it.prezzoUnit) * (parseFloat(it.qty)||0)).toFixed(2);
+    var sub = (_prezzoEffettivo(it) * (parseFloat(it.qty)||0)).toFixed(2);
     h += '<label class="riepilogo-row' + (isChecked ? ' riepilogo-row-done' : '') + '" onclick="toggleRiepilogoCheck(\'' + cartId + '\',' + idx + ')">';
     h += '<div class="riepilogo-check' + (isChecked ? ' riepilogo-check-on' : '') + '">';
     h += isChecked ? '✓' : '';
@@ -2016,7 +2022,7 @@ function confermaOrdineAFornitori(){
 function inviaOrdine(cartId){
   var cart=carrelli.find(function(c){return c.id===cartId;});
   if(!cart||!(cart.items||[]).length){showToastGen('red','-- Carrello vuoto!');return;}
-  var tot=(cart.items||[]).reduce(function(s,it){return s+(parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0));},0);
+  var tot=(cart.items||[]).reduce(function(s,it){return s+(_prezzoEffettivo(it)*parseFloat(it.qty||0));},0);
   var numOrd=getNextOrdNum();
   var ord={
     id:'ord_'+Date.now(),
@@ -2026,7 +2032,18 @@ function inviaOrdine(cartId){
     data:new Date().toLocaleDateString('it-IT'),
     dataISO:new Date().toISOString().slice(0,10),
     createdAt:new Date().toISOString(),
-    items:JSON.parse(JSON.stringify(cart.items)),
+    items:(function(){
+      var cpy=JSON.parse(JSON.stringify(cart.items));
+      cpy.forEach(function(it){
+        var scOn=it.scampolo||it.fineRotolo;
+        var sc=it._scontoApplicato||0;
+        if(scOn&&sc>0){
+          it._prezzoOriginale=it.prezzoUnit;
+          it.prezzoUnit=(parsePriceIT(it.prezzoUnit)*(1-sc/100)).toFixed(2);
+        }
+      });
+      return cpy;
+    })(),
     nota:cart.nota||'',
     totale:tot.toFixed(2),
     stato:'nuovo',
@@ -2095,7 +2112,7 @@ function aggiornaOrdine(cartId){
   // Aggiorna ordine con i dati modificati del carrello
   ord.items=JSON.parse(JSON.stringify(cart.items));
   ord.nota=cart.nota||'';
-  var tot=(cart.items||[]).reduce(function(s,it){return s+(parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0));},0);
+  var tot=(cart.items||[]).reduce(function(s,it){return s+(_prezzoEffettivo(it)*parseFloat(it.qty||0));},0);
   ord.totale=tot.toFixed(2);
   ord.scontoGlobale=cart.scontoGlobale||null;
   ord.modificato=true;
@@ -2146,7 +2163,7 @@ function renderEditOrdine(){
   var ord=ordini[_editOrdIdx];
   if(!ord)return;
   var items=_editOrdItems;
-  var tot=items.reduce(function(s,it){return s+(parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0));},0);
+  var tot=items.reduce(function(s,it){return s+(_prezzoEffettivo(it)*parseFloat(it.qty||0));},0);
   var h='';
   h+='<div style="font-size:15px;font-weight:900;color:#b794f4;margin-bottom:4px;">-- Modifica ordine'+(ord.numero?' #'+ord.numero:'')+'</div>';
   h+='<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">'+esc(ord.nomeCliente)+' - '+ord.data+' '+ord.ora+'</div>';
@@ -2216,7 +2233,7 @@ function _editOrdSconto(idx,val){
 function salvaEditOrdine(){
   var ord=ordini[_editOrdIdx];if(!ord)return;
   ord.items=JSON.parse(JSON.stringify(_editOrdItems));
-  var tot=_editOrdItems.reduce(function(s,it){return s+(parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0));},0);
+  var tot=_editOrdItems.reduce(function(s,it){return s+(_prezzoEffettivo(it)*parseFloat(it.qty||0));},0);
   ord.totale=tot.toFixed(2);
   ord.modificato=true;ord.modificatoAt=new Date().toLocaleString('it-IT');ord.modificatoAtISO=new Date().toISOString();
   saveOrdini();
