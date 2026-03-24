@@ -928,17 +928,12 @@ function renderCartTabs(){
     bar.parentNode.insertBefore(wrap, bar);
   }
 
-  // Riga 1: ORDINI centrato
+  // Riga unica: ORDINI + CLIENTI + NUOVO
   var row1 = document.getElementById('ct-row-ordini');
-  if(!row1){ row1 = document.createElement('div'); row1.id = 'ct-row-ordini'; row1.className = 'ct-header-row ct-header-row--ordini'; wrap.appendChild(row1); }
-  row1.innerHTML =
-    '<button id="ct-btn-ordfor" onclick="goTab(\'t-ordfor\');renderOrdFor()" title="Ordini per fornitore">📦 ORDINI FORNITORE</button>';
-
-  // Riga 2: CLIENTI + NUOVO
-  var row2 = document.getElementById('ct-row-azioni');
-  if(!row2){ row2 = document.createElement('div'); row2.id = 'ct-row-azioni'; row2.className = 'ct-header-row ct-header-row--azioni'; wrap.appendChild(row2); }
+  if(!row1){ row1 = document.createElement('div'); row1.id = 'ct-row-ordini'; row1.className = 'ct-header-row ct-header-row--compact'; wrap.appendChild(row1); }
   var nCl = carrelli.length;
-  row2.innerHTML =
+  row1.innerHTML =
+    '<button id="ct-btn-ordfor" onclick="goTab(\'t-ordfor\');renderOrdFor()" title="Ordini per fornitore">📦 ORDINI</button>' +
     '<button id="ct-btn-clienti" onclick="ctApriClienti()" title="Scegli cliente">' +
       '👥 CLIENTI' + (nCl ? ' <span class="ct-pill-n">' + nCl + '</span>' : '') +
     '</button>' +

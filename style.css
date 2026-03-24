@@ -1559,19 +1559,13 @@ button[touch-action="manipulation"],
   width: 100%;
 }
 
-/* RIGA 1 — Tasto ORDINI centrato */
-.ct-header-row--ordini {
+/* RIGA UNICA — ORDINI + CLIENTI + NUOVO */
+.ct-header-row--compact {
   justify-content: center;
-  padding-top: 8px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid #1e1e1e;
-}
-
-/* RIGA 2 — CLIENTI + NUOVO a sinistra */
-.ct-header-row--azioni {
-  justify-content: flex-start;
   padding-top: 6px;
   padding-bottom: 4px;
+  border-bottom: 1px solid #1e1e1e;
+  gap: 6px;
 }
 
 /* RIGA 3 — pillole scroll laterale */
@@ -1587,43 +1581,44 @@ button[touch-action="manipulation"],
 }
 .ct-header-row--pills::-webkit-scrollbar { display: none; }
 
-/* ── Tasto ORDINI — giallo centrato ────────────────────────────── */
+/* ── Tasto ORDINI — giallo compatto ────────────────────────────── */
 #ct-btn-ordfor {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 9px 28px;
-  border-radius: 22px;
+  gap: 4px;
+  padding: 7px 14px;
+  border-radius: 20px;
   border: none;
   background: var(--ct-yellow);
   color: #111;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 900;
-  letter-spacing: 1px;
+  letter-spacing: .5px;
   text-transform: uppercase;
   cursor: pointer;
   touch-action: manipulation;
-  box-shadow: 0 2px 12px rgba(255,215,0,.35);
+  box-shadow: 0 2px 8px rgba(255,215,0,.3);
   transition: transform .1s, filter .1s;
-  min-height: 40px;
+  min-height: 34px;
+  white-space: nowrap;
 }
 #ct-btn-ordfor:active { transform: scale(.96); filter: brightness(.88); }
 
-/* ── Tasto CLIENTI — outline giallo ────────────────────────────── */
+/* ── Tasto CLIENTI — outline giallo compatto ───────────────────── */
 #ct-btn-clienti {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
+  gap: 4px;
+  padding: 7px 12px;
   border-radius: 20px;
   border: 2px solid var(--ct-yellow);
   background: transparent;
   color: var(--ct-yellow);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   cursor: pointer;
   touch-action: manipulation;
-  min-height: 38px;
+  min-height: 34px;
   white-space: nowrap;
   transition: background .12s;
 }
@@ -1639,23 +1634,23 @@ button[touch-action="manipulation"],
   font-weight: 700;
 }
 
-/* ── Tasto NUOVO — dashed giallo ────────────────────────────────── */
+/* ── Tasto NUOVO — dashed giallo compatto ────────────────────────── */
 .ct-pill--new {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 7px 14px;
+  gap: 3px;
+  padding: 6px 11px;
   border-radius: 20px;
   border: 2px dashed var(--ct-yellow);
   background: transparent;
   color: var(--ct-yellow);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
   touch-action: manipulation;
-  min-height: 38px;
+  min-height: 34px;
 }
 .ct-pill--new:active { background: rgba(255,215,0,.08); }
 
