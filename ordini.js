@@ -508,7 +508,7 @@ function renderOrdini(){
 
       // OVERLAY LOCK - se un altro dispositivo sta lavorando
       if(lockInfo){
-        h+='<div class="ord-lock-overlay" ondblclick="ordForceLock(\''+ord.id+'\','+gi+')">';
+        h+='<div class="ord-lock-overlay" onclick="ordDblTap(this,\'force\',\''+ord.id+'\','+gi+')">';
         h+='<div class="ord-lock-msg">';
         h+='<div style="font-size:24px;margin-bottom:6px">🔒</div>';
         h+='<div style="font-size:14px;font-weight:800">IN LAVORAZIONE</div>';
@@ -572,17 +572,17 @@ function renderOrdini(){
         h+='<div class="ord-item-name">'+esc(it.desc||'—')+'</div>';
         var codes='';
         if(it.codM) codes+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
-        codes+='<span class="ord-code-forn ord-editable" ondblclick="ordInlineEdit(this,'+gi+','+ii+',\'codF\')" title="Doppio click per modificare">'+esc(it.codF||'—')+'</span>';
+        codes+='<span class="ord-code-forn ord-editable" onclick="ordDblTap(this,\'codF\','+gi+','+ii+')" title="Doppio tap per modificare">'+esc(it.codF||'—')+'</span>';
         h+='<div class="ord-item-codes">'+codes+'</div>';
         if(it.nota) h+='<div class="ord-item-nota">📝 '+esc(it.nota)+'</div>';
         if(it.daOrdinare) h+='<div class="ord-item-daord">🚚 DA ORDINARE</div>';
         h+='</div>';
 
         // Quantità — dblclick per editare
-        h+='<div class="ord-gc-qty ord-editable" ondblclick="ordInlineEdit(this,'+gi+','+ii+',\'qty\')" title="Doppio click per modificare">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
+        h+='<div class="ord-gc-qty ord-editable" onclick="ordDblTap(this,\'qty\','+gi+','+ii+')" title="Doppio tap per modificare">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
 
         // Prezzo unitario — con sconto sbarrato se presente
-        h+='<div class="ord-gc-price ord-editable" ondblclick="ordInlineEdit(this,'+gi+','+ii+',\'price\')" title="Doppio click per modificare">';
+        h+='<div class="ord-gc-price ord-editable" onclick="ordDblTap(this,\'price\','+gi+','+ii+')" title="Doppio tap per modificare">';
         if(hasSconto){
           h+='<div class="ct-old--orig">€'+prezOrigNum.toFixed(2)+'</div>';
           h+='<div class="ct-sub--final">€'+pu.toFixed(2)+'</div>';
@@ -1989,4 +1989,36 @@ function ordForceLock(ordId, gi){
   ordLock(ordId);
   showToastGen('orange','🔓 Lock forzato — ora lavori tu');
   renderOrdini();
+}
+
+// ── DOPPIO TAP UNIVERSALE ORDINI (Safari iOS compatibile) ────────
+// Sostituisce ondblclick che non funziona su iPhone.
+// Primo tap: evidenzia elemento. Secondo tap entro 400ms: esegue azione.
+var _ordDblTapTimer = null;
+var _ordDblTapEl = null;
+
+function ordDblTap(el, action, arg1, arg2){
+  if(_ordDblTapEl === el){
+    // SECONDO TAP — esegui azione
+    clearTimeout(_ordDblTapTimer);
+    _ordDblTapEl = null;
+    if(action === 'force'){
+      ordForceLock(arg1, arg2);
+    } else {
+      ordInlineEdit(el, arg1, arg2, action);
+    }
+  } else {
+    // PRIMO TAP — evidenzia e aspetta
+    if(_ordDblTapTimer) clearTimeout(_ordDblTapTimer);
+    _ordDblTapEl = el;
+    el.style.outline = '2px solid var(--accent)';
+    el.style.outlineOffset = '-2px';
+    _ordDblTapTimer = setTimeout(function(){
+      if(_ordDblTapEl === el){
+        el.style.outline = '';
+        el.style.outlineOffset = '';
+      }
+      _ordDblTapEl = null;
+    }, 400);
+  }
 }
