@@ -151,19 +151,9 @@ function chiudiEditOrdine(){document.getElementById('edit-ord-overlay').style.di
 
 // --- INLINE EDIT ORDINI (doppio click su cella) ----------------
 function ordInlineEdit(el, gi, ii, field){
-  // Risali al contenitore con la classe ord-editable o ord-gc-*
-  var cell = el;
-  while(cell && !cell.classList.contains('ord-editable') && !cell.classList.contains('ord-gc-price') && !cell.classList.contains('ord-gc-qty') && !cell.classList.contains('ord-code-forn')){
-    cell = cell.parentElement;
-    if(!cell) { cell = el; break; }
-  }
-  if(cell.querySelector('input')) return; // già in editing
+  if(el.querySelector && el.querySelector('input')) return;
   var ord = ordini[gi];
   if(!ord || !ord.items[ii]) return;
-  // Lock: blocca se un altro ci sta lavorando
-  var lockInfo = ordIsLockedByOther(ord.id);
-  if(lockInfo){ showToastGen('orange','\u{1F512} '+(lockInfo.name||'Altro')+' sta lavorando'); return; }
-  ordLock(ord.id);
   var it = ord.items[ii];
   var oldVal = '';
   var inputType = 'text';
@@ -176,8 +166,8 @@ function ordInlineEdit(el, gi, ii, field){
   inp.value = oldVal;
   inp.className = 'ord-inline-input';
   if(field === 'qty'){ inp.min = '0.5'; inp.step = '0.5'; }
-  cell.innerHTML = '';
-  cell.appendChild(inp);
+  el.innerHTML = '';
+  el.appendChild(inp);
   inp.focus();
   inp.select();
 
@@ -841,7 +831,6 @@ function renderOrdiniByDate(){
 var _cassaOrdId=null;
 
 function openCassa(gi){
-  var ord=ordini[gi];if(ord){var lk=ordIsLockedByOther(ord.id);if(lk){showToastGen('orange','🔒 '+(lk.name||'Altro')+' sta lavorando');return;}ordLock(ord.id);}
   var ord=ordini[gi];
   if(!ord)return;
   _cassaOrdId=ord.id;
