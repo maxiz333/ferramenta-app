@@ -307,7 +307,7 @@ document.addEventListener('DOMContentLoaded', function(){
       _fbSyncing=true;
       try{
         ordini=fresh;lsSet(ORDK,ordini);updateOrdBadge();updateOrdCounter();
-        var t=document.getElementById('to');if(t&&t.classList.contains('active'))renderOrdini();
+        var t=document.getElementById('to');if(t&&t.classList.contains('active')&&!document.querySelector('.ord-inline-input'))renderOrdini();
         // Solo ordini con stato 'nuovo' che NON erano gi- noti
         var nuovi=fresh.filter(function(o){return o.stato==='nuovo'&&!_idKnown[o.id];});
         if(nuovi.length){
