@@ -597,10 +597,45 @@ function renderOrdini(){
         }
         h+='</div>';
 
+        // Mini azioni articolo — forbici + nota (sotto la griglia, compatto)
+        var scOn2 = it.scampolo||it.fineRotolo||false;
+        var hasNota2 = !!(it.nota && it.nota.trim());
+        var sc2 = it._scontoApplicato||0;
+        if(ost!=='completato'){
+          h+='<div class="ord-item-actions" style="grid-column:1/-1;display:flex;gap:4px;align-items:center;padding:2px 4px;">';
+          // Forbici
+          var forbLbl2 = it._tuttoRotolo?'ROT':(scOn2?(it.fineRotolo?'ROT':'SCA'):'');
+          h+='<button class="ord-mini-btn'+(scOn2||it._tuttoRotolo?' ord-mini-on':'')+'" onclick="ordToggleScampolo('+gi+','+ii+')" title="Scampolo/Rotolo">';
+          h+='✂'+(forbLbl2?' '+forbLbl2:'')+'</button>';
+          // % sconto inline
+          if(scOn2||it._tuttoRotolo){
+            h+='<input type="number" min="0" max="100" value="'+(sc2||'')+'" placeholder="%" class="ord-mini-pct" onchange="ordSetSconto('+gi+','+ii+',this.value)" onclick="event.stopPropagation();this.select()">';
+            h+='<span style="font-size:9px;color:#68d391">%</span>';
+          }
+          // Nota articolo
+          h+='<button class="ord-mini-btn'+(hasNota2?' ord-mini-on':'')+'" onclick="ordEditNota('+gi+','+ii+')" title="Nota" style="margin-left:auto">📝</button>';
+          h+='</div>';
+        } else if(hasNota2||scOn2){
+          // Completato: mostra solo badge se presenti
+          h+='<div style="grid-column:1/-1;padding:1px 4px;font-size:9px;color:#666;">';
+          if(scOn2&&sc2) h+='<span>✂ -'+sc2+'%</span> ';
+          if(hasNota2) h+='<span>📝 '+esc(it.nota)+'</span>';
+          h+='</div>';
+        }
+
         h+='</div>';
       });
 
       h+='</div>';
+
+      // Nota ordine editabile (prima del totale)
+      if(ost!=='completato'){
+        h+='<div class="ord-nota-edit" style="padding:4px 12px;">';
+        h+='<input type="text" class="ord-nota-input" value="'+esc(ord.nota||'')+'" placeholder="📋 Nota ordine..." onchange="ordSetNotaOrdine('+gi+',this.value)" onclick="event.stopPropagation()">';
+        h+='</div>';
+      } else if(ord.nota){
+        h+='<div class="ord-nota">📋 '+esc(ord.nota)+'</div>';
+      }
 
       // ── TOTALE ORDINE — grande e visibile ──
       h+='<div class="ord-total-bar">';
@@ -2024,4 +2059,60 @@ function ordDblTap(el, action, arg1, arg2){
       _ordDblTapEl = null;
     }, 500);
   }
+}
+
+// ── SCAMPOLO/ROTOLO/NOTA negli ordini ────────────────────────────
+function ordToggleScampolo(gi, ii){
+  var ord=ordini[gi]; if(!ord||!ord.items[ii]) return;
+  var it=ord.items[ii];
+  if(!it.scampolo && !it.fineRotolo){
+    it.scampolo=true; it.fineRotolo=false;
+    if(!it._scontoApplicato) it._scontoApplicato=30;
+  } else if(it.scampolo){
+    it.scampolo=false; it.fineRotolo=true;
+    it._tuttoRotolo=true;
+    if(!it._scontoApplicato) it._scontoApplicato=0;
+  } else {
+    it.scampolo=false; it.fineRotolo=false;
+    it._tuttoRotolo=false;
+    delete it._scontoApplicato;
+  }
+  _ordRecalcSave(gi);
+}
+
+function ordSetSconto(gi, ii, val){
+  var ord=ordini[gi]; if(!ord||!ord.items[ii]) return;
+  var it=ord.items[ii];
+  var sc=parseFloat(val)||0;
+  it._scontoApplicato=sc;
+  if(sc>0 && it._prezzoOriginale){
+    it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-sc/100)).toFixed(2);
+  } else if(sc>0){
+    it._prezzoOriginale=it.prezzoUnit;
+    it.prezzoUnit=(parsePriceIT(it.prezzoUnit)*(1-sc/100)).toFixed(2);
+  }
+  _ordRecalcSave(gi);
+}
+
+function ordEditNota(gi, ii){
+  var ord=ordini[gi]; if(!ord||!ord.items[ii]) return;
+  var nota=prompt('Nota articolo:', ord.items[ii].nota||'');
+  if(nota===null) return;
+  ord.items[ii].nota=nota;
+  saveOrdini(); renderOrdini();
+}
+
+function ordSetNotaOrdine(gi, val){
+  var ord=ordini[gi]; if(!ord) return;
+  ord.nota=val;
+  saveOrdini();
+}
+
+function _ordRecalcSave(gi){
+  var ord=ordini[gi]; if(!ord) return;
+  var tot=ord.items.reduce(function(s,x){return s+parsePriceIT(x.prezzoUnit)*parseFloat(x.qty||0);},0);
+  ord.totale=tot.toFixed(2);
+  ord.modificato=true;
+  ord.modificatoAt=new Date().toLocaleString('it-IT');
+  saveOrdini(); renderOrdini();
 }

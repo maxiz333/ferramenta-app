@@ -244,3 +244,24 @@ body.light-mode .dao-group-header { border-color:#ddd; }
   color: #fff;
   padding: 16px;
 }
+
+/* ── Mini azioni articolo ordine ── */
+.ord-mini-btn {
+  padding: 2px 6px; border-radius: 4px;
+  border: 1px solid #333; background: transparent;
+  color: #555; font-size: 10px; cursor: pointer;
+  touch-action: manipulation; min-height: 24px;
+}
+.ord-mini-btn:active { filter: brightness(.7); }
+.ord-mini-on { color: var(--accent); border-color: rgba(255,215,0,.3); background: rgba(255,215,0,.06); }
+.ord-mini-pct {
+  width: 30px; padding: 1px 2px; border: 1px solid #333;
+  border-radius: 3px; background: #111; color: #68d391;
+  font-size: 10px; font-weight: 700; text-align: center;
+}
+.ord-nota-input {
+  width: 100%; padding: 5px 8px; border: 1px solid #2a2a2a;
+  border-radius: 6px; background: #141414; color: #aaa;
+  font-size: 11px; box-sizing: border-box; outline: none;
+}
+.ord-nota-input:focus { border-color: var(--accent); color: #ddd; }
