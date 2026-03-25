@@ -510,7 +510,7 @@ function renderOrdini(){
       if(lockInfo){
         h+='<div class="ord-lock-overlay" ondblclick="ordForceLock(\''+ord.id+'\','+gi+')">';
         h+='<div class="ord-lock-msg">';
-        h+='<div style="font-size:24px;margin-bottom:6px">\xF0\x9F\x94\x92</div>';
+        h+='<div style="font-size:24px;margin-bottom:6px">🔒</div>';
         h+='<div style="font-size:14px;font-weight:800">IN LAVORAZIONE</div>';
         h+='<div style="font-size:11px;margin-top:4px;color:#aaa">'+esc(lockInfo.name||'Altro dispositivo')+'</div>';
         h+='<div style="font-size:10px;margin-top:8px;color:#666">Doppio tap per forzare</div>';

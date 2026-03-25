@@ -201,24 +201,29 @@ function setDeviceName(name){
   localStorage.setItem('cp4_deviceName', name);
 }
 
+function _lockKey(ordId){ return String(ordId).replace(/[.#$/\[\]]/g, '_'); }
+
 function ordLock(ordId){
   if(!_fbReady || !_fbDb || !ordId) return;
-  var lock = { by: _deviceId, name: _deviceName || _deviceId, at: Date.now() };
-  _ordLocks[ordId] = lock;
-  try{ _fbDb.ref('locks/' + ordId).set(lock); }catch(e){}
+  var key = _lockKey(ordId);
+  var lock = { by: _deviceId, name: _deviceName || _deviceId, at: Date.now(), ordId: ordId };
+  _ordLocks[key] = lock;
+  try{ _fbDb.ref('locks/' + key).set(lock); }catch(e){ console.error('ordLock err:', e); }
 }
 
 function ordUnlock(ordId){
   if(!_fbReady || !_fbDb || !ordId) return;
-  delete _ordLocks[ordId];
-  try{ _fbDb.ref('locks/' + ordId).remove(); }catch(e){}
+  var key = _lockKey(ordId);
+  delete _ordLocks[key];
+  try{ _fbDb.ref('locks/' + key).remove(); }catch(e){}
 }
 
 function ordIsLockedByOther(ordId){
-  var lock = _ordLocks[ordId];
+  var key = _lockKey(ordId);
+  var lock = _ordLocks[key];
   if(!lock) return false;
   if(lock.by === _deviceId) return false;
-  if(Date.now() - lock.at > LOCK_EXPIRE) return false; // scaduto
+  if(Date.now() - lock.at > LOCK_EXPIRE) return false;
   return lock;
 }
 
@@ -228,9 +233,11 @@ function _initLockListener(){
   _fbDb.ref('locks').on('value', function(snap){
     var d = snap.val();
     _ordLocks = d || {};
-    // Aggiorna UI se tab ordini è attiva
+    // Aggiorna UI ordini se tab attiva
     var t = document.getElementById('to');
-    if(t && t.classList.contains('active')) renderOrdini();
+    if(t && t.classList.contains('active')){
+      try{ renderOrdini(); }catch(e){}
+    }
   });
 }
 
