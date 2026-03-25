@@ -123,7 +123,7 @@
   background:#2a1515; padding:1px 6px; border-radius:4px;
 }
 .ord-item-nota {
-  font-size:11px; color:#f6ad55; margin-top:3px;
+  font-size:12px; color:var(--accent); margin-top:3px; font-weight:600;
 }
 .ord-item-daord {
   font-size:10px; color:#fc8181; font-weight:900; margin-top:3px;
@@ -255,9 +255,9 @@ body.light-mode .dao-group-header { border-color:#ddd; }
 .ord-mini-btn:active { filter: brightness(.7); }
 .ord-mini-on { color: var(--accent); border-color: rgba(255,215,0,.3); background: rgba(255,215,0,.06); }
 .ord-mini-pct {
-  width: 40px; padding: 3px 4px; border: 1px solid #333;
-  border-radius: 4px; background: #111; color: #68d391;
-  font-size: 12px; font-weight: 700; text-align: center;
+  width: 52px; padding: 5px 6px; border: 1px solid #444;
+  border-radius: 5px; background: #181818; color: #68d391;
+  font-size: 14px; font-weight: 700; text-align: center;
 }
 /* Riga azioni evidenziata per scampolo (giallo) e rotolo (rosso) */
 .ord-actions-scampolo {
@@ -274,3 +274,18 @@ body.light-mode .dao-group-header { border-color:#ddd; }
   font-size: 11px; box-sizing: border-box; outline: none;
 }
 .ord-nota-input:focus { border-color: var(--accent); color: #ddd; }
+
+/* ── Ordine completato bloccato ── */
+.ord-card--done {
+  opacity: .55;
+  background: #0a120a !important;
+  border-color: #38a16933 !important;
+  border-top-color: #38a16966 !important;
+}
+.ord-card--done .ord-item-name { color: #777; }
+.ord-card--done .ord-gc-qty { color: #777; }
+.ord-card--done .ord-gc-price { color: #666; }
+.ord-card--done .ord-gc-sub { color: #68d391; }
+.ord-card--done .ord-total-value { color: #68d391; }
+.ord-card--done .ord-cliente-nome { color: #999; }
+.ord-card--done .ord-item-codes span { opacity: .5; }

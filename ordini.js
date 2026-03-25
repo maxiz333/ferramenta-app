@@ -500,7 +500,9 @@ function renderOrdini(){
 
       // ── CARD ORDINE — blocco massiccio con bordo colorato top ──
       var lockInfo = ordIsLockedByOther(ord.id);
-      h+='<div class="ord-card" style="border-top:4px solid '+sc+';position:relative;">';
+      var isCompleted = ost==='completato';
+      var unlocked = ord.unlocked || false;
+      h+='<div class="ord-card'+(isCompleted&&!unlocked?' ord-card--done':'')+'" style="border-top:4px solid '+sc+';position:relative;">';
 
       // OVERLAY LOCK - se un altro dispositivo sta lavorando
       if(lockInfo){
@@ -527,11 +529,6 @@ function renderOrdini(){
       h+=' · '+nArt+' articol'+(nArt===1?'o':'i');
       h+='</div>';
       h+='</div>';
-
-      // ── NOTA ORDINE ──
-      if(ord.nota){
-        h+='<div class="ord-nota">📝 '+esc(ord.nota)+'</div>';
-      }
 
       // ── GRIGLIA ARTICOLI — header ──
       h+='<div class="ord-items-wrap">';
@@ -570,7 +567,6 @@ function renderOrdini(){
         if(it.codM) codes+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
         codes+='<span class="ord-code-forn ord-editable" onclick="ordInlineEdit(this,'+gi+','+ii+',\'codF\')" title="Tap per modificare">'+esc(it.codF||'—')+'</span>';
         h+='<div class="ord-item-codes">'+codes+'</div>';
-        if(it.nota) h+='<div class="ord-item-nota">📝 '+esc(it.nota)+'</div>';
         if(it.daOrdinare) h+='<div class="ord-item-daord">🚚 DA ORDINARE</div>';
         h+='</div>';
 
@@ -602,8 +598,7 @@ function renderOrdini(){
         var scOn2 = it.scampolo||it.fineRotolo||false;
         var hasNota2 = !!(it.nota && it.nota.trim());
         var sc2 = it._scontoApplicato||0;
-        if(ost!=='completato'){
-          var actClass = it._tuttoRotolo||it.fineRotolo ? 'ord-actions-rotolo' : (it.scampolo ? 'ord-actions-scampolo' : '');
+        var actClass = it._tuttoRotolo||it.fineRotolo ? 'ord-actions-rotolo' : (it.scampolo ? 'ord-actions-scampolo' : '');
           h+='<div class="ord-item-actions '+ actClass +'" style="display:flex;gap:4px;align-items:center;padding:2px 8px;">';
           // Forbici
           var forbLbl2 = it._tuttoRotolo?'ROT':(scOn2?(it.fineRotolo?'ROT':'SCA'):'');
@@ -617,26 +612,15 @@ function renderOrdini(){
           // Nota articolo
           h+='<button class="ord-mini-btn'+(hasNota2?' ord-mini-on':'')+'" onclick="ordEditNota('+gi+','+ii+')" title="Nota" style="margin-left:auto">📝</button>';
           h+='</div>';
-        } else if(hasNota2||scOn2){
-          // Completato: mostra solo badge se presenti
-          h+='<div style="padding:1px 8px;font-size:9px;color:#666;">';
-          if(scOn2&&sc2) h+='<span>✂ -'+sc2+'%</span> ';
-          if(hasNota2) h+='<span>📝 '+esc(it.nota)+'</span>';
-          h+='</div>';
-        }
 
       });
 
       h+='</div>';
 
       // Nota ordine editabile (prima del totale)
-      if(ost!=='completato'){
-        h+='<div class="ord-nota-edit" style="padding:4px 12px;">';
-        h+='<input type="text" class="ord-nota-input" value="'+esc(ord.nota||'')+'" placeholder="📋 Nota ordine..." onchange="ordSetNotaOrdine('+gi+',this.value)" onclick="event.stopPropagation()">';
-        h+='</div>';
-      } else if(ord.nota){
-        h+='<div class="ord-nota">📋 '+esc(ord.nota)+'</div>';
-      }
+      h+='<div class="ord-nota-edit" style="padding:4px 12px;">';
+      h+='<input type="text" class="ord-nota-input" value="'+esc(ord.nota||'')+'" placeholder="📋 Nota ordine..." onchange="ordSetNotaOrdine('+gi+',this.value)" onclick="event.stopPropagation()">';
+      h+='</div>';
 
       // ── TOTALE ORDINE — grande e visibile ──
       h+='<div class="ord-total-bar">';
@@ -644,21 +628,31 @@ function renderOrdini(){
       h+='<span class="ord-total-value">€ '+tot.toFixed(2)+'</span>';
       h+='</div>';
 
-      // ── AZIONI — due righe wrap ──
-      h+='<div class="ord-actions">';
-      if(ost!=='completato'){
-        h+='<button onclick="setStatoOrdine('+gi+',\'completato\')" class="ord-abtn ord-abtn--done">✅ Fatto</button>';
+      // ── AZIONI ──
+      if(isCompleted && !unlocked){
+        // Completato e bloccato: solo Sblocca, Stampa, Elimina
+        h+='<div class="ord-actions">';
+        h+='<button onclick="ordSbloccaFatto('+gi+')" class="ord-abtn ord-abtn--reopen">🔓 Sblocca</button>';
+        h+='<button onclick="stampaRicevuta(ordini['+gi+'].items,ordini['+gi+'].nomeCliente,ordini['+gi+'].totale,ordini['+gi+'].nota)" class="ord-abtn ord-abtn--print">🖨️ Stampa</button>';
+        h+='<button onclick="deleteOrdine('+gi+')" class="ord-abtn ord-abtn--del">🗑️ Elimina</button>';
+        h+='</div>';
       } else {
-        h+='<button onclick="setStatoOrdine('+gi+',\'nuovo\')" class="ord-abtn ord-abtn--reopen">↩️ Riapri</button>';
+        h+='<div class="ord-actions">';
+        if(!isCompleted){
+          h+='<button onclick="setStatoOrdine('+gi+',\'completato\')" class="ord-abtn ord-abtn--done">✅ Fatto</button>';
+        } else {
+          h+='<button onclick="ordRibloccaFatto('+gi+')" class="ord-abtn ord-abtn--done">🔒 Blocca</button>';
+          h+='<button onclick="setStatoOrdine('+gi+',\'nuovo\')" class="ord-abtn ord-abtn--reopen">↩️ Riapri</button>';
+        }
+        h+='<button onclick="openCassa('+gi+')" class="ord-abtn ord-abtn--cassa">💰 Cassa</button>';
+        h+='</div>';
+        h+='<div class="ord-actions ord-actions-sec">';
+        h+='<button onclick="stampaRicevuta(ordini['+gi+'].items,ordini['+gi+'].nomeCliente,ordini['+gi+'].totale,ordini['+gi+'].nota)" class="ord-abtn ord-abtn--print">🖨️ Stampa</button>';
+        if(ost!=='lavorazione') h+='<button onclick="setStatoOrdine('+gi+',\'lavorazione\')" class="ord-abtn ord-abtn--wip">⏳ In corso</button>';
+        if(ost!=='pronto') h+='<button onclick="setStatoOrdine('+gi+',\'pronto\')" class="ord-abtn ord-abtn--ready">📦 Pronto</button>';
+        h+='<button onclick="deleteOrdine('+gi+')" class="ord-abtn ord-abtn--del">🗑️ Elimina</button>';
+        h+='</div>';
       }
-      h+='<button onclick="openCassa('+gi+')" class="ord-abtn ord-abtn--cassa">💰 Cassa</button>';
-      h+='</div>';
-      h+='<div class="ord-actions ord-actions-sec">';
-      h+='<button onclick="stampaRicevuta(ordini['+gi+'].items,ordini['+gi+'].nomeCliente,ordini['+gi+'].totale,ordini['+gi+'].nota)" class="ord-abtn ord-abtn--print">🖨️ Stampa</button>';
-      if(ost!=='lavorazione') h+='<button onclick="setStatoOrdine('+gi+',\'lavorazione\')" class="ord-abtn ord-abtn--wip">⏳ In corso</button>';
-      if(ost!=='pronto') h+='<button onclick="setStatoOrdine('+gi+',\'pronto\')" class="ord-abtn ord-abtn--ready">📦 Pronto</button>';
-      h+='<button onclick="deleteOrdine('+gi+')" class="ord-abtn ord-abtn--del">🗑️ Elimina</button>';
-      h+='</div>';
 
       h+='</div>'; // fine ord-card
 
@@ -1206,6 +1200,8 @@ function ordBlocca(gi){
   var o=ordini[gi];
   if(o){o.unlocked=false; saveOrdini(); renderOrdini();}
 }
+function ordSbloccaFatto(gi){ ordSblocca(gi); }
+function ordRibloccaFatto(gi){ ordBlocca(gi); }
       function renderItemsEditabili(){
         var existing=wrap.querySelector('.items-edit-list');
         if(existing) existing.remove();
@@ -2127,4 +2123,18 @@ function _ordRecalcSave(gi){
   ord.modificato=true;
   ord.modificatoAt=new Date().toLocaleString('it-IT');
   saveOrdini(); renderOrdini();
+}
+
+// ── SBLOCCA/RIBLOCCA ordine completato per modifiche ─────────────
+function ordSbloccaFatto(gi){
+  var ord=ordini[gi]; if(!ord) return;
+  ord._unlocked=true;
+  saveOrdini(); renderOrdini();
+  showToastGen('orange','🔓 Ordine sbloccato per modifiche');
+}
+function ordRibloccaFatto(gi){
+  var ord=ordini[gi]; if(!ord) return;
+  delete ord._unlocked;
+  saveOrdini(); renderOrdini();
+  showToastGen('green','🔒 Ordine ribloccato');
 }
