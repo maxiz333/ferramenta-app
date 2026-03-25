@@ -224,3 +224,23 @@ body.light-mode .ord-code-forn   { background:#fde8e8; }
 body.light-mode .dao-group { background:#fff; border-color:#ddd; }
 body.light-mode .dao-group-header { border-color:#ddd; }
 
+
+/* ── Lock collaborativo overlay ── */
+.ord-lock-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.7);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.ord-lock-msg {
+  text-align: center;
+  color: #fff;
+  padding: 16px;
+}

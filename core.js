@@ -184,6 +184,56 @@ function _fbSaveArticolo(idx){
   }catch(e){ console.error('Firebase save articolo:', e); }
 }
 
+// ══ LOCK COLLABORATIVO ORDINI ════════════════════════════════════
+// Chi apre un ordine lo "blocca" su Firebase per 5 minuti.
+// L'altro utente vede un overlay "In lavorazione" e può forzare con doppio tap.
+var LOCK_EXPIRE = 5 * 60 * 1000; // 5 minuti
+var _deviceId = localStorage.getItem('cp4_deviceId');
+if(!_deviceId){
+  _deviceId = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
+  localStorage.setItem('cp4_deviceId', _deviceId);
+}
+var _deviceName = localStorage.getItem('cp4_deviceName') || '';
+var _ordLocks = {}; // ordId -> {by, name, at}
+
+function setDeviceName(name){
+  _deviceName = name;
+  localStorage.setItem('cp4_deviceName', name);
+}
+
+function ordLock(ordId){
+  if(!_fbReady || !_fbDb || !ordId) return;
+  var lock = { by: _deviceId, name: _deviceName || _deviceId, at: Date.now() };
+  _ordLocks[ordId] = lock;
+  try{ _fbDb.ref('locks/' + ordId).set(lock); }catch(e){}
+}
+
+function ordUnlock(ordId){
+  if(!_fbReady || !_fbDb || !ordId) return;
+  delete _ordLocks[ordId];
+  try{ _fbDb.ref('locks/' + ordId).remove(); }catch(e){}
+}
+
+function ordIsLockedByOther(ordId){
+  var lock = _ordLocks[ordId];
+  if(!lock) return false;
+  if(lock.by === _deviceId) return false;
+  if(Date.now() - lock.at > LOCK_EXPIRE) return false; // scaduto
+  return lock;
+}
+
+// Ascolta i lock in tempo reale da Firebase
+function _initLockListener(){
+  if(!_fbReady || !_fbDb) return;
+  _fbDb.ref('locks').on('value', function(snap){
+    var d = snap.val();
+    _ordLocks = d || {};
+    // Aggiorna UI se tab ordini è attiva
+    var t = document.getElementById('to');
+    if(t && t.classList.contains('active')) renderOrdini();
+  });
+}
+
 // Traccia ultimo articolo modificato per sync automatico
 var _lastModifiedIdx = null;
 
@@ -285,6 +335,8 @@ document.addEventListener('DOMContentLoaded', function(){
     }
 
     console.log('Firebase connesso');
+    // Avvia listener lock collaborativo
+    _initLockListener();
   }catch(e){console.error('Firebase:',e);_hideLoadingBar();}
 })();
 

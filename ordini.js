@@ -151,9 +151,13 @@ function chiudiEditOrdine(){document.getElementById('edit-ord-overlay').style.di
 
 // --- INLINE EDIT ORDINI (doppio click su cella) ----------------
 function ordInlineEdit(el, gi, ii, field){
-  if(el.querySelector('input')) return; // già in editing
+  if(el.querySelector('input')) return;
   var ord = ordini[gi];
   if(!ord || !ord.items[ii]) return;
+  // Lock: blocca se un altro ci sta lavorando
+  var lockInfo = ordIsLockedByOther(ord.id);
+  if(lockInfo){ showToastGen('orange','🔒 '+esc(lockInfo.name||'Altro')+' sta lavorando'); return; }
+  ordLock(ord.id);
   var it = ord.items[ii];
   var oldVal = '';
   var inputType = 'text';
@@ -223,6 +227,10 @@ function filterOrdini(f){
 }
 function setStatoOrdine(gi,stato){
   var o=ordini[gi];if(!o)return;
+  // Lock collaborativo: blocca ordine mentre ci lavori
+  ordLock(o.id);
+  // Rilascia lock se completato
+  if(stato==='completato') ordUnlock(o.id);
   o.stato=stato;
   if(!o.statiLog)o.statiLog={};
   o.statiLog[stato]={ora:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),data:new Date().toLocaleDateString('it-IT')};
@@ -495,7 +503,19 @@ function renderOrdini(){
       (ord.items||[]).forEach(function(it){tot+=parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0);});
 
       // ── CARD ORDINE — blocco massiccio con bordo colorato top ──
-      h+='<div class="ord-card" style="border-top:4px solid '+sc+';">';
+      var lockInfo = ordIsLockedByOther(ord.id);
+      h+='<div class="ord-card" style="border-top:4px solid '+sc+';position:relative;">';
+
+      // OVERLAY LOCK - se un altro dispositivo sta lavorando
+      if(lockInfo){
+        h+='<div class="ord-lock-overlay" ondblclick="ordForceLock(\''+ord.id+'\','+gi+')">';
+        h+='<div class="ord-lock-msg">';
+        h+='<div style="font-size:24px;margin-bottom:6px">\xF0\x9F\x94\x92</div>';
+        h+='<div style="font-size:14px;font-weight:800">IN LAVORAZIONE</div>';
+        h+='<div style="font-size:11px;margin-top:4px;color:#aaa">'+esc(lockInfo.name||'Altro dispositivo')+'</div>';
+        h+='<div style="font-size:10px;margin-top:8px;color:#666">Doppio tap per forzare</div>';
+        h+='</div></div>';
+      }
 
       // ── HEADER: banda colorata con stato ──
       h+='<div class="ord-card-stato" style="background:'+sc+';color:'+(ost==='nuovo'?'#111':'#fff')+'">';
@@ -815,6 +835,7 @@ function renderOrdiniByDate(){
 var _cassaOrdId=null;
 
 function openCassa(gi){
+  var ord=ordini[gi];if(ord){var lk=ordIsLockedByOther(ord.id);if(lk){showToastGen('orange','🔒 '+(lk.name||'Altro')+' sta lavorando');return;}ordLock(ord.id);}
   var ord=ordini[gi];
   if(!ord)return;
   _cassaOrdId=ord.id;
@@ -1961,3 +1982,11 @@ function cancelEditProdotto(){
 }
 
 
+
+
+// ── LOCK COLLABORATIVO — forza accesso con doppio tap ────────────
+function ordForceLock(ordId, gi){
+  ordLock(ordId);
+  showToastGen('orange','🔓 Lock forzato — ora lavori tu');
+  renderOrdini();
+}
