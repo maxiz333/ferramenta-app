@@ -38,11 +38,11 @@
   font-size:12px; font-weight:800;
   letter-spacing:1.5px; text-align:center;
 }
-/* Completato: banda più discreta */
+/* Completato: banda sottile con check */
 .ord-card--done .ord-card-stato {
-  padding:4px 16px;
-  font-size:11px;
-  opacity: 0.7;
+  padding:3px 16px;
+  font-size:10px;
+  letter-spacing:1px;
 }
 
 /* ── Cliente ── */
