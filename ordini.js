@@ -595,14 +595,15 @@ function renderOrdini(){
         } else {
           h+='€'+sub;
         }
-        h+='</div>';
+        h+='</div>'; // fine ord-gc-sub
+        h+='</div>'; // fine ord-grid-row
 
-        // Mini azioni articolo — forbici + nota (sotto la griglia, compatto)
+        // Mini azioni articolo — forbici + nota (fuori dalla griglia, div separato)
         var scOn2 = it.scampolo||it.fineRotolo||false;
         var hasNota2 = !!(it.nota && it.nota.trim());
         var sc2 = it._scontoApplicato||0;
         if(ost!=='completato'){
-          h+='<div class="ord-item-actions" style="grid-column:1/-1;display:flex;gap:4px;align-items:center;padding:2px 4px;">';
+          h+='<div class="ord-item-actions" style="display:flex;gap:4px;align-items:center;padding:2px 8px;">';
           // Forbici
           var forbLbl2 = it._tuttoRotolo?'ROT':(scOn2?(it.fineRotolo?'ROT':'SCA'):'');
           h+='<button class="ord-mini-btn'+(scOn2||it._tuttoRotolo?' ord-mini-on':'')+'" onclick="ordToggleScampolo('+gi+','+ii+')" title="Scampolo/Rotolo">';
@@ -617,13 +618,12 @@ function renderOrdini(){
           h+='</div>';
         } else if(hasNota2||scOn2){
           // Completato: mostra solo badge se presenti
-          h+='<div style="grid-column:1/-1;padding:1px 4px;font-size:9px;color:#666;">';
+          h+='<div style="padding:1px 8px;font-size:9px;color:#666;">';
           if(scOn2&&sc2) h+='<span>✂ -'+sc2+'%</span> ';
           if(hasNota2) h+='<span>📝 '+esc(it.nota)+'</span>';
           h+='</div>';
         }
 
-        h+='</div>';
       });
 
       h+='</div>';
@@ -2066,15 +2066,25 @@ function ordToggleScampolo(gi, ii){
   var ord=ordini[gi]; if(!ord||!ord.items[ii]) return;
   var it=ord.items[ii];
   if(!it.scampolo && !it.fineRotolo){
+    // OFF -> Scampolo
+    if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
     it.scampolo=true; it.fineRotolo=false;
     if(!it._scontoApplicato) it._scontoApplicato=30;
+    // Applica sconto al prezzoUnit
+    it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-it._scontoApplicato/100)).toFixed(2);
   } else if(it.scampolo){
+    // Scampolo -> Rotolo
     it.scampolo=false; it.fineRotolo=true;
     it._tuttoRotolo=true;
-    if(!it._scontoApplicato) it._scontoApplicato=0;
+    it._scontoApplicato=0;
+    // Ripristina prezzo originale (rotolo intero = prezzo pieno)
+    if(it._prezzoOriginale) it.prezzoUnit=it._prezzoOriginale;
   } else {
+    // Rotolo -> OFF: ripristina prezzo originale
     it.scampolo=false; it.fineRotolo=false;
     it._tuttoRotolo=false;
+    if(it._prezzoOriginale) it.prezzoUnit=it._prezzoOriginale;
+    delete it._prezzoOriginale;
     delete it._scontoApplicato;
   }
   _ordRecalcSave(gi);
@@ -2085,11 +2095,12 @@ function ordSetSconto(gi, ii, val){
   var it=ord.items[ii];
   var sc=parseFloat(val)||0;
   it._scontoApplicato=sc;
-  if(sc>0 && it._prezzoOriginale){
+  // Ricalcola prezzoUnit dal prezzo originale
+  if(it._prezzoOriginale && sc>0){
     it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-sc/100)).toFixed(2);
-  } else if(sc>0){
-    it._prezzoOriginale=it.prezzoUnit;
-    it.prezzoUnit=(parsePriceIT(it.prezzoUnit)*(1-sc/100)).toFixed(2);
+  } else if(it._prezzoOriginale){
+    // Sconto = 0, ripristina originale
+    it.prezzoUnit=it._prezzoOriginale;
   }
   _ordRecalcSave(gi);
 }
