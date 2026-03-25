@@ -572,17 +572,17 @@ function renderOrdini(){
         h+='<div class="ord-item-name">'+esc(it.desc||'—')+'</div>';
         var codes='';
         if(it.codM) codes+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
-        codes+='<span class="ord-code-forn ord-editable" onclick="ordDblTap(this,\'codF\','+gi+','+ii+')" title="Doppio tap per modificare">'+esc(it.codF||'—')+'</span>';
+        codes+='<span class="ord-code-forn ord-editable" onclick="ordInlineEdit(this,'+gi+','+ii+',\'codF\')" title="Tap per modificare">'+esc(it.codF||'—')+'</span>';
         h+='<div class="ord-item-codes">'+codes+'</div>';
         if(it.nota) h+='<div class="ord-item-nota">📝 '+esc(it.nota)+'</div>';
         if(it.daOrdinare) h+='<div class="ord-item-daord">🚚 DA ORDINARE</div>';
         h+='</div>';
 
         // Quantità — dblclick per editare
-        h+='<div class="ord-gc-qty ord-editable" onclick="ordDblTap(this,\'qty\','+gi+','+ii+')" title="Doppio tap per modificare">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
+        h+='<div class="ord-gc-qty ord-editable" onclick="ordInlineEdit(this,'+gi+','+ii+',\'qty\')" title="Tap per modificare">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
 
         // Prezzo unitario — con sconto sbarrato se presente
-        h+='<div class="ord-gc-price ord-editable" onclick="ordDblTap(this,\'price\','+gi+','+ii+')" title="Doppio tap per modificare">';
+        h+='<div class="ord-gc-price ord-editable" onclick="ordInlineEdit(this,'+gi+','+ii+',\'price\')" title="Tap per modificare">';
         if(hasSconto){
           h+='<div class="ct-old--orig">€'+prezOrigNum.toFixed(2)+'</div>';
           h+='<div class="ct-sub--final">€'+pu.toFixed(2)+'</div>';
