@@ -1897,6 +1897,7 @@ function saveEditProdotto(){
   // Salva tutto
   lsSet(SK, rows);
   lsSet(MAGK, magazzino);
+  _fbSaveArticolo(i);
   updateStats();
   updateStockBadge();
 

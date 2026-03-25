@@ -175,6 +175,44 @@ function numpadConfirm(){
 }
 
 
+// ══ SALVATAGGIO SINGOLO ARTICOLO SU FIREBASE ═════════════════════
+// Salva solo l'articolo modificato (non tutti i 14.000)
+function _fbSaveArticolo(idx){
+  if(!_fbReady || !_fbDb || !rows[idx]) return;
+  try{
+    _fbDb.ref(MAGEXT_K + '/' + idx).set(rows[idx]);
+  }catch(e){ console.error('Firebase save articolo:', e); }
+}
+
+// Traccia ultimo articolo modificato per sync automatico
+var _lastModifiedIdx = null;
+
+// Wrappa save() di database.js per sincronizzare su Firebase
+// Viene eseguito dopo che database.js è caricato
+document.addEventListener('DOMContentLoaded', function(){
+  setTimeout(function(){
+    if(typeof save === 'function'){
+      var _origSave = save;
+      save = function(){
+        _origSave();
+        // Se c'è un articolo appena modificato, salvalo su Firebase
+        if(_lastModifiedIdx !== null){
+          _fbSaveArticolo(_lastModifiedIdx);
+          _lastModifiedIdx = null;
+        }
+      };
+    }
+    // Wrappa quickEditPrice per tracciare l'indice modificato
+    if(typeof quickEditPrice === 'function'){
+      var _origQEP = quickEditPrice;
+      quickEditPrice = function(idx){
+        _lastModifiedIdx = idx;
+        _origQEP(idx);
+      };
+    }
+  }, 100);
+});
+
 // ══ FIREBASE INIT & CARICAMENTO ═══════════════════════════════════
 // --- FIREBASE ---
 // Mostra indicatore di caricamento subito, prima ancora di connettersi
