@@ -1,0 +1,226 @@
+/* ══ ORDINI — griglia, card, azioni, spacer ══════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════
+   TAB ORDINI — redesign v2
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Contatore filtrato ── */
+.ord-fcount {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:28px; height:28px; padding:0 8px;
+  border-radius:50%; background:var(--accent); color:#111;
+  font-size:14px; font-weight:900;
+  line-height:1;
+}
+
+/* ── Separatore data ── */
+.ord-date-sep {
+  display:flex; align-items:center; gap:10px;
+  padding:22px 0 12px; user-select:none;
+}
+.ord-date-line { flex:1; height:2px; background:#2a2a2a; }
+.ord-date-label {
+  font-size:12px; font-weight:900; color:#888;
+  letter-spacing:2px; text-transform:uppercase; white-space:nowrap;
+}
+
+/* ── Card ordine — blocco solido ── */
+.ord-card {
+  background:#161616;
+  border-radius:16px;
+  overflow:hidden;
+  border:2px solid #2a2a2a;
+  /* border-top override inline per colore stato */
+}
+
+/* ── Banda stato in alto ── */
+.ord-card-stato {
+  padding:8px 16px;
+  font-size:13px; font-weight:900;
+  letter-spacing:2px; text-align:center;
+}
+
+/* ── Cliente ── */
+.ord-card-cliente {
+  padding:14px 16px 8px;
+}
+.ord-cliente-nome {
+  font-size:20px; font-weight:900; color:var(--text);
+  line-height:1.2;
+  word-break:break-word;
+}
+.ord-cliente-meta {
+  font-size:12px; color:#666; margin-top:4px;
+}
+
+/* ── Nota ordine ── */
+.ord-nota {
+  margin:0 14px 10px; padding:8px 12px;
+  background:#2a1800; border-left:3px solid #f6ad55;
+  border-radius:6px; font-size:12px; color:#f6ad55; font-weight:600;
+}
+
+/* ── Griglia articoli wrap ── */
+.ord-items-wrap {
+  padding:0; overflow-x:hidden;
+}
+.ord-grid {
+  display:grid;
+  grid-template-columns: 40% 16% 22% 22%;
+  padding:0 6px;
+  align-items:center;
+}
+.ord-grid-head {
+  border-bottom:2px solid #333;
+  padding-top:6px; padding-bottom:6px;
+}
+.ord-gh {
+  font-size:10px; font-weight:800; color:#666;
+  text-transform:uppercase; letter-spacing:1px;
+  padding:6px 4px;
+}
+.ord-gh-c { text-align:center; }
+
+.ord-grid-row { padding-top:8px; padding-bottom:8px; border-bottom:1px solid #222; }
+.ord-grid-even { background:#161616; }
+.ord-grid-odd  { background:#1c1c1c; }
+
+/* Celle grid */
+.ord-gc-desc { padding:2px 8px 2px 4px; min-width:0; }
+.ord-gc-qty {
+  text-align:center; font-size:15px; font-weight:900;
+  color:var(--accent); padding:2px 4px;
+}
+.ord-gc-qty .ord-unit { display:block; font-size:10px; font-weight:600; color:#888; }
+.ord-gc-price { text-align:center; font-size:12px; color:#999; padding:2px 2px; display:flex; flex-direction:column; justify-content:center; align-items:center; overflow:hidden; }
+.ord-gc-sub   { text-align:center; font-size:12px; font-weight:900; color:var(--text); padding:2px 2px; display:flex; flex-direction:column; justify-content:center; align-items:center; overflow:hidden; }
+
+/* Celle editabili — doppio click */
+.ord-editable { cursor: pointer; border-radius: 4px; transition: background .15s; }
+.ord-editable:hover { background: rgba(255,215,0,.08); }
+.ord-inline-input {
+  width: 100%; box-sizing: border-box;
+  padding: 3px 5px; border: 1px solid var(--accent);
+  border-radius: 5px; background: #111; color: var(--accent);
+  font-size: 13px; font-weight: 700; text-align: center;
+  outline: none;
+}
+
+/* Prodotto — nome e codici */
+.ord-td-desc { min-width:120px; }
+.ord-item-name {
+  font-size:13px; font-weight:800; color:#eee;
+  line-height:1.2; word-break:break-word;
+}
+.ord-item-codes {
+  margin-top:3px; display:flex; gap:8px; flex-wrap:wrap;
+}
+.ord-code-mag {
+  font-size:11px; font-weight:800; color:var(--accent);
+  background:#2a2500; padding:1px 6px; border-radius:4px;
+}
+.ord-code-forn {
+  font-size:11px; font-weight:800; color:#fc8181;
+  background:#2a1515; padding:1px 6px; border-radius:4px;
+}
+.ord-item-nota {
+  font-size:11px; color:#f6ad55; margin-top:3px;
+}
+.ord-item-daord {
+  font-size:10px; color:#fc8181; font-weight:900; margin-top:3px;
+  letter-spacing:.5px;
+}
+
+/* Quantità */
+.ord-td-qty {
+  font-size:15px; font-weight:900; color:var(--accent);
+  white-space:nowrap;
+}
+.ord-unit { font-size:10px; font-weight:600; color:#888; }
+
+/* Prezzo e subtotale */
+.ord-td-price { font-size:13px; color:#999; }
+.ord-td-sub   { font-size:14px; font-weight:900; color:var(--text); }
+
+/* ── Barra totale ── */
+.ord-total-bar {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:12px 16px;
+  background:#111; border-top:2px solid #2a2a2a;
+}
+.ord-total-label {
+  font-size:13px; font-weight:900; color:#666;
+  letter-spacing:2px;
+}
+.ord-total-value {
+  font-size:26px; font-weight:900; color:var(--accent);
+}
+
+/* ── Azioni ── */
+.ord-actions {
+  display:flex; gap:6px; padding:8px 12px 4px;
+  flex-wrap:wrap;
+}
+.ord-actions-sec {
+  padding:4px 12px 10px;
+}
+.ord-abtn {
+  min-height:42px; padding:0 12px;
+  border-radius:10px; border:none;
+  font-size:0.8rem; font-weight:800;
+  cursor:pointer; touch-action:manipulation;
+  font-family:inherit;
+  display:flex; align-items:center; justify-content:center; gap:4px;
+  white-space:nowrap;
+}
+.ord-abtn--done  { flex:1; background:#38a169; color:#fff; font-size:0.85rem; }
+.ord-abtn--reopen{ flex:1; background:transparent; border:2px solid #f5c40055; color:#f5c400; font-size:0.85rem; }
+.ord-abtn--cassa { flex:1; background:transparent; border:2px solid var(--accent); color:var(--accent); font-size:0.85rem; }
+.ord-abtn--edit  { flex:1; background:transparent; border:1px solid #805ad544; color:#b794f4; }
+.ord-abtn--print { flex:1; background:transparent; border:1px solid #33333366; color:#888; }
+.ord-abtn--wip   { flex:1; background:transparent; border:1px solid #3182ce44; color:#63b3ed; }
+.ord-abtn--ready { flex:1; background:transparent; border:1px solid #dd6b2044; color:#f6ad55; }
+.ord-abtn--del   { background:transparent; border:1px solid #e53e3e33; color:#e53e3e88; padding:0 10px; }
+
+/* ── Spacer tra ordini — divisione netta ── */
+.ord-spacer {
+  padding:26px 0;
+  display:flex; align-items:center; justify-content:center;
+}
+.ord-spacer-line {
+  width:80%; height:3px;
+  background:repeating-linear-gradient(
+    90deg, #2a2a2a 0, #2a2a2a 8px, transparent 8px, transparent 16px
+  );
+  border-radius:2px;
+}
+
+/* ── Light mode overrides ── */
+body.light-mode .ord-card { background:#fff; border-color:#ddd; }
+body.light-mode .ord-grid-even { background:#fff; }
+body.light-mode .ord-grid-odd  { background:#f8f8f8; }
+body.light-mode .ord-grid-head { border-color:#ddd; }
+body.light-mode .ord-grid-row  { border-color:#eee; }
+body.light-mode .ord-total-bar   { background:#f5f5f5; border-color:#ddd; }
+body.light-mode .ord-item-name   { color:#111; }
+body.light-mode .ord-gc-sub      { color:#111; }
+body.light-mode .ord-date-line   { background:#ddd; }
+body.light-mode .ord-spacer-line { background:repeating-linear-gradient(90deg,#ccc 0,#ccc 8px,transparent 8px,transparent 16px); }
+body.light-mode .ord-code-mag    { background:#f5f0d0; }
+body.light-mode .ord-code-forn   { background:#fde8e8; }
+
+/* ── Vista "Da ordinare" ── */
+.dao-group {
+  background:#161616; border-radius:12px;
+  margin-bottom:16px; overflow:hidden;
+  border:2px solid #2a2a2a;
+}
+.dao-group-header {
+  padding:12px 16px;
+  font-size:16px; font-weight:900;
+  letter-spacing:1px;
+  border-bottom:2px solid #2a2a2a;
+}
+.dao-table { margin:0; }
+body.light-mode .dao-group { background:#fff; border-color:#ddd; }
+body.light-mode .dao-group-header { border-color:#ddd; }
+
