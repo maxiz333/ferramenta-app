@@ -603,7 +603,8 @@ function renderOrdini(){
         var hasNota2 = !!(it.nota && it.nota.trim());
         var sc2 = it._scontoApplicato||0;
         if(ost!=='completato'){
-          h+='<div class="ord-item-actions" style="display:flex;gap:4px;align-items:center;padding:2px 8px;">';
+          var actClass = it._tuttoRotolo||it.fineRotolo ? 'ord-actions-rotolo' : (it.scampolo ? 'ord-actions-scampolo' : '');
+          h+='<div class="ord-item-actions '+ actClass +'" style="display:flex;gap:4px;align-items:center;padding:2px 8px;">';
           // Forbici
           var forbLbl2 = it._tuttoRotolo?'ROT':(scOn2?(it.fineRotolo?'ROT':'SCA'):'');
           h+='<button class="ord-mini-btn'+(scOn2||it._tuttoRotolo?' ord-mini-on':'')+'" onclick="ordToggleScampolo('+gi+','+ii+')" title="Scampolo/Rotolo">';

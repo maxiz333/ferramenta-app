@@ -255,9 +255,18 @@ body.light-mode .dao-group-header { border-color:#ddd; }
 .ord-mini-btn:active { filter: brightness(.7); }
 .ord-mini-on { color: var(--accent); border-color: rgba(255,215,0,.3); background: rgba(255,215,0,.06); }
 .ord-mini-pct {
-  width: 30px; padding: 1px 2px; border: 1px solid #333;
-  border-radius: 3px; background: #111; color: #68d391;
-  font-size: 10px; font-weight: 700; text-align: center;
+  width: 40px; padding: 3px 4px; border: 1px solid #333;
+  border-radius: 4px; background: #111; color: #68d391;
+  font-size: 12px; font-weight: 700; text-align: center;
+}
+/* Riga azioni evidenziata per scampolo (giallo) e rotolo (rosso) */
+.ord-actions-scampolo {
+  background: rgba(255,215,0,.08);
+  border-left: 3px solid var(--accent);
+}
+.ord-actions-rotolo {
+  background: rgba(229,62,62,.08);
+  border-left: 3px solid #e53e3e;
 }
 .ord-nota-input {
   width: 100%; padding: 5px 8px; border: 1px solid #2a2a2a;
