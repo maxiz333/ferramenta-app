@@ -1996,11 +1996,19 @@ function ordForceLock(ordId, gi){
 // Primo tap: evidenzia elemento. Secondo tap entro 400ms: esegue azione.
 var _ordDblTapTimer = null;
 var _ordDblTapEl = null;
+var _ordDblTapKey = null;
 
 function ordDblTap(el, action, arg1, arg2){
-  if(_ordDblTapEl === el){
+  // Risali al genitore con onclick se il tap cade su un figlio
+  while(el && !el.getAttribute('onclick') && el.parentElement){
+    el = el.parentElement;
+  }
+  var key = action + '_' + arg1 + '_' + arg2;
+  if(_ordDblTapKey === key){
     // SECONDO TAP — esegui azione
     clearTimeout(_ordDblTapTimer);
+    _ordDblTapKey = null;
+    if(_ordDblTapEl){ _ordDblTapEl.style.outline=''; _ordDblTapEl.style.outlineOffset=''; }
     _ordDblTapEl = null;
     if(action === 'force'){
       ordForceLock(arg1, arg2);
@@ -2010,15 +2018,15 @@ function ordDblTap(el, action, arg1, arg2){
   } else {
     // PRIMO TAP — evidenzia e aspetta
     if(_ordDblTapTimer) clearTimeout(_ordDblTapTimer);
+    if(_ordDblTapEl){ _ordDblTapEl.style.outline=''; _ordDblTapEl.style.outlineOffset=''; }
+    _ordDblTapKey = key;
     _ordDblTapEl = el;
     el.style.outline = '2px solid var(--accent)';
     el.style.outlineOffset = '-2px';
     _ordDblTapTimer = setTimeout(function(){
-      if(_ordDblTapEl === el){
-        el.style.outline = '';
-        el.style.outlineOffset = '';
-      }
+      if(_ordDblTapEl){ _ordDblTapEl.style.outline=''; _ordDblTapEl.style.outlineOffset=''; }
+      _ordDblTapKey = null;
       _ordDblTapEl = null;
-    }, 400);
+    }, 500);
   }
 }
