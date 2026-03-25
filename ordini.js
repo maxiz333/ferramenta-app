@@ -567,6 +567,7 @@ function renderOrdini(){
         if(it.codM) codes+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
         codes+='<span class="ord-code-forn ord-editable" onclick="ordInlineEdit(this,'+gi+','+ii+',\'codF\')" title="Tap per modificare">'+esc(it.codF||'—')+'</span>';
         h+='<div class="ord-item-codes">'+codes+'</div>';
+        if(it.nota) h+='<div class="ord-item-nota">📝 '+esc(it.nota)+'</div>';
         if(it.daOrdinare) h+='<div class="ord-item-daord">🚚 DA ORDINARE</div>';
         h+='</div>';
 
