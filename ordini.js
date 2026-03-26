@@ -201,13 +201,29 @@ function ordInlineEdit(el, gi, ii, field){
 
 // --- ORDINI ---------------------------------------------------
 function filterOrdini(f){
-  // Se siamo nella vista "da ordinare", chiuderla
+  // Chiudi vista "da ordinare"
   if(_daOrdView){
     _daOrdView=false;
     var dbtn=document.getElementById('ord-f-daordinare');
     if(dbtn){dbtn.style.background='transparent';dbtn.style.color='#fc8181';}
     var listEl=document.getElementById('ord-list');if(listEl)listEl.style.display='';
     var daoEl=document.getElementById('ord-daordinare-view');if(daoEl)daoEl.style.display='none';
+  }
+  // Chiudi cestino
+  if(_cestinoOrdOpen){
+    _cestinoOrdOpen=false;
+    var cb=document.getElementById('ord-f-cestino');
+    if(cb){cb.style.background='transparent';cb.style.borderColor='#222';cb.style.color='#444';}
+    var cv=document.getElementById('ord-cestino-view');if(cv)cv.style.display='none';
+    var ll=document.getElementById('ord-list');if(ll)ll.style.display='';
+  }
+  // Chiudi storico
+  if(_storicoOpen){
+    _storicoOpen=false;
+    var sb=document.getElementById('ord-f-storico');
+    if(sb){sb.style.background='transparent';sb.style.borderColor='#333';}
+    var sv=document.getElementById('ord-storico-view');if(sv)sv.style.display='none';
+    var ll2=document.getElementById('ord-list');if(ll2)ll2.style.display='';
   }
   ordFiltro=f;
   ['nuovo','lavorazione','pronto','completato','tutti'].forEach(function(x){
@@ -231,14 +247,106 @@ function setStatoOrdine(gi,stato){
   if(stato==='completato') o.completatoAtISO=new Date().toISOString();
   saveOrdini();renderOrdini();
 }
+var ORDK_CESTINO = 'cp4_ordini_cestino';
+var ordiniCestino = lsGet(ORDK_CESTINO) || [];
+var _cestinoOrdOpen = false;
+
 function deleteOrdine(gi){
   showConfirm('Eliminare questo ordine?',function(){
-    ordini.splice(gi,1);saveOrdini();renderOrdini();showToastGen('red','- Eliminato');
+    var ord = ordini.splice(gi,1)[0];
+    if(ord){
+      ord.eliminatoAt = new Date().toLocaleString('it-IT');
+      ordiniCestino.unshift(ord);
+      lsSet(ORDK_CESTINO, ordiniCestino);
+    }
+    saveOrdini();renderOrdini();showToastGen('red','Ordine spostato nel cestino');
   });
 }
-function clearOrdiniCompletati(){
-  showConfirm('Rimuovere tutti i completati?',function(){
-    ordini=ordini.filter(function(o){return o.stato!=='completato';});saveOrdini();renderOrdini();
+
+function toggleCestinoOrdini(){
+  _cestinoOrdOpen = !_cestinoOrdOpen;
+  var btn = document.getElementById('ord-f-cestino');
+  if(btn){
+    btn.style.background = _cestinoOrdOpen ? '#e53e3e22' : 'transparent';
+    btn.style.borderColor = _cestinoOrdOpen ? '#e53e3e' : '#222';
+    btn.style.color = _cestinoOrdOpen ? '#fc8181' : '#444';
+  }
+  var listEl = document.getElementById('ord-list');
+  if(_cestinoOrdOpen){
+    if(listEl) listEl.style.display = 'none';
+    renderCestinoOrdini();
+  } else {
+    var cv = document.getElementById('ord-cestino-view');
+    if(cv) cv.style.display = 'none';
+    if(listEl) listEl.style.display = '';
+  }
+}
+
+function renderCestinoOrdini(){
+  var cv = document.getElementById('ord-cestino-view');
+  if(!cv){
+    cv = document.createElement('div');
+    cv.id = 'ord-cestino-view';
+    var listEl = document.getElementById('ord-list');
+    if(listEl) listEl.parentNode.insertBefore(cv, listEl.nextSibling);
+    else return;
+  }
+  cv.style.display = 'block';
+  if(!ordiniCestino.length){
+    cv.innerHTML = '<div style="text-align:center;color:#555;padding:30px;font-size:13px;">Cestino vuoto.</div>';
+    return;
+  }
+  var h = '<div style="padding:8px 0 12px;text-align:center;font-size:12px;font-weight:700;color:#fc8181;">🗑️ CESTINO — ' + ordiniCestino.length + ' ordini eliminati</div>';
+  ordiniCestino.forEach(function(ord,ci){
+    var nArt = (ord.items||[]).length;
+    var tot = 0;
+    (ord.items||[]).forEach(function(it){tot += parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0);});
+    h += '<div style="border:1px solid #2a2a2a;border-radius:10px;margin-bottom:8px;overflow:hidden;border-top:3px solid #e53e3e;">';
+    h += '<div style="background:#e53e3e22;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;">';
+    h += '<span style="font-size:13px;font-weight:800;color:#fc8181;">'+esc(ord.nomeCliente||'—')+'</span>';
+    h += '<span style="font-size:10px;color:#888;">'+esc(ord.eliminatoAt||ord.data||'')+'</span>';
+    h += '</div>';
+    h += '<div style="padding:6px 12px;display:flex;justify-content:space-between;align-items:center;">';
+    h += '<span style="font-size:11px;color:#888;">'+nArt+' articoli — €'+tot.toFixed(2)+'</span>';
+    h += '<div style="display:flex;gap:6px;">';
+    h += '<button onclick="ripristinaOrdine('+ci+')" style="padding:4px 10px;border-radius:6px;border:1px solid #38a16944;background:transparent;color:#68d391;font-size:11px;cursor:pointer;">↩️ Ripristina</button>';
+    h += '<button onclick="eliminaDefinitivo('+ci+')" style="padding:4px 10px;border-radius:6px;border:1px solid #e53e3e44;background:transparent;color:#fc8181;font-size:11px;cursor:pointer;">✕</button>';
+    h += '</div></div></div>';
+  });
+  h += '<div style="text-align:center;padding:12px;">';
+  h += '<button onclick="svuotaCestinoOrdini()" style="padding:6px 16px;border-radius:8px;border:1px solid #e53e3e44;background:transparent;color:#fc8181;font-size:11px;cursor:pointer;">🗑️ Svuota cestino</button>';
+  h += '</div>';
+  cv.innerHTML = h;
+}
+
+function ripristinaOrdine(ci){
+  var ord = ordiniCestino.splice(ci,1)[0];
+  if(ord){
+    delete ord.eliminatoAt;
+    ord.stato = 'nuovo';
+    ordini.unshift(ord);
+    saveOrdini();
+    lsSet(ORDK_CESTINO, ordiniCestino);
+    renderCestinoOrdini();
+    showToastGen('green','↩️ Ordine ripristinato');
+  }
+}
+
+function eliminaDefinitivo(ci){
+  showConfirm('Eliminare definitivamente?',function(){
+    ordiniCestino.splice(ci,1);
+    lsSet(ORDK_CESTINO, ordiniCestino);
+    renderCestinoOrdini();
+    showToastGen('red','Eliminato definitivamente');
+  });
+}
+
+function svuotaCestinoOrdini(){
+  showConfirm('Svuotare tutto il cestino?',function(){
+    ordiniCestino = [];
+    lsSet(ORDK_CESTINO, []);
+    renderCestinoOrdini();
+    showToastGen('red','Cestino svuotato');
   });
 }
 
@@ -562,7 +670,7 @@ function renderOrdini(){
 
         // Colonna prodotto: nome + codici sotto (codF editabile con dblclick)
         h+='<div class="ord-gc-desc">';
-        h+='<div class="ord-item-name">'+esc(it.desc||'—')+'</div>';
+        h+='<div class="ord-item-name" onclick="openSchedaFromOrdine('+gi+','+ii+')" style="cursor:pointer;">'+esc(it.desc||'\u2014')+'</div>';
         var codes='';
         if(it.codM) codes+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
         codes+='<span class="ord-code-forn'+(_canEdit?' ord-editable':'')+'"'+(_canEdit?' onclick="ordInlineEdit(this,'+gi+','+ii+',\'codF\')" title="Tap per modificare"':'')+'>'+esc(it.codF||'—')+'</span>';
@@ -2145,4 +2253,134 @@ function ordSetUnit(gi, ii, val){
   ord.modificato=true;
   ord.modificatoAt=new Date().toLocaleString('it-IT');
   saveOrdini(); renderOrdini();
+}
+
+// ══ SCHEDA RAPIDA PRODOTTO — popup con foto, desc, posizione ════════════════
+// Si apre cliccando sul nome articolo sia dalla tab ordini che inventario
+function openSchedaRapida(rowIdx){
+  if(!rows[rowIdx]) return;
+  var r = rows[rowIdx];
+  var m = magazzino[rowIdx] || {};
+  
+  // Crea overlay
+  var ov = document.getElementById('scheda-rapida-ov');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'scheda-rapida-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;';
+    document.body.appendChild(ov);
+  }
+  
+  var h = '<div style="background:#1a1a1a;border:1px solid var(--border);border-radius:14px;max-width:360px;width:92%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.8);">';
+  
+  // Header con X
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #2a2a2a;">';
+  h += '<span style="font-size:14px;font-weight:800;color:var(--accent);">Scheda Prodotto</span>';
+  h += '<button onclick="closeSchedaRapida()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;">✕</button>';
+  h += '</div>';
+  
+  // Foto
+  h += '<div id="sr-foto" style="text-align:center;padding:12px;min-height:60px;">';
+  h += '<div style="color:#555;font-size:11px;">Caricamento foto...</div>';
+  h += '</div>';
+  
+  // Nome prodotto
+  h += '<div style="padding:0 16px 8px;">';
+  h += '<div style="font-size:18px;font-weight:900;color:var(--accent);line-height:1.3;">'+esc(r.desc||'—')+'</div>';
+  h += '</div>';
+  
+  // Codici
+  h += '<div style="padding:0 16px 10px;display:flex;gap:8px;flex-wrap:wrap;">';
+  if(r.codM) h += '<span style="background:#2a2500;color:var(--accent);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">M: '+esc(r.codM)+'</span>';
+  if(r.codF) h += '<span style="background:#2a1015;color:#fc8181;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">F: '+esc(r.codF)+'</span>';
+  h += '</div>';
+  
+  // Prezzo
+  if(r.prezzo){
+    h += '<div style="padding:0 16px 10px;">';
+    h += '<span style="font-size:22px;font-weight:900;color:var(--accent);">€ '+esc(r.prezzo)+'</span>';
+    h += '</div>';
+  }
+  
+  // Specs
+  if(m.specs){
+    h += '<div style="padding:0 16px 10px;font-size:12px;color:#aaa;line-height:1.4;">'+esc(m.specs)+'</div>';
+  }
+  
+  // Posizione — editabile
+  h += '<div style="padding:8px 16px;border-top:1px solid #2a2a2a;">';
+  h += '<label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;">Posizione</label>';
+  h += '<input type="text" id="sr-pos" value="'+esc(m.posizione||'')+'" placeholder="Es. corsia 3, scaffale B" ';
+  h += 'style="width:100%;padding:6px 8px;margin-top:4px;border:1px solid #2a2a2a;border-radius:6px;background:#111;color:#888;font-size:11px;font-weight:600;box-sizing:border-box;outline:none;" ';
+  h += 'onchange="salvaPosizioneRapida('+rowIdx+',this.value)">';
+  h += '</div>';
+  
+  // Quantità in magazzino
+  h += '<div style="padding:8px 16px 14px;display:flex;justify-content:space-between;align-items:center;">';
+  h += '<span style="font-size:11px;color:#888;">Quantità in magazzino</span>';
+  h += '<span style="font-size:15px;font-weight:800;color:'+(m.qty>0?'#68d391':'#fc8181')+';">'+(m.qty!==undefined&&m.qty!==''?m.qty:'—')+'</span>';
+  h += '</div>';
+  
+  h += '</div>';
+  
+  ov.innerHTML = h;
+  ov.style.display = 'flex';
+  ov.onclick = function(e){ if(e.target === ov) closeSchedaRapida(); };
+  
+  // Carica foto da IndexedDB
+  if(typeof idbGetFoto === 'function'){
+    idbGetFoto(rowIdx).then(function(dataURL){
+      var fotoEl = document.getElementById('sr-foto');
+      if(!fotoEl) return;
+      if(dataURL){
+        fotoEl.innerHTML = '<img src="'+dataURL+'" style="max-width:100%;max-height:200px;border-radius:8px;object-fit:contain;">';
+      } else {
+        fotoEl.innerHTML = '<div style="color:#444;font-size:11px;padding:20px;">Nessuna foto</div>';
+      }
+    });
+  }
+}
+
+function closeSchedaRapida(){
+  var ov = document.getElementById('scheda-rapida-ov');
+  if(ov) ov.style.display = 'none';
+}
+
+function salvaPosizioneRapida(rowIdx, val){
+  if(!magazzino[rowIdx]) magazzino[rowIdx] = {};
+  magazzino[rowIdx].posizione = val;
+  lsSet(MAGK, magazzino);
+  // Salva anche su Firebase
+  _fbSaveArticolo(rowIdx);
+  showToastGen('green','📍 Posizione salvata');
+}
+
+// Trova l'indice in rows[] da un item ordine (tramite codM o codF+desc)
+function _findRowIdx(it){
+  if(it.rowIdx !== undefined && it.rowIdx !== null && rows[it.rowIdx]) return it.rowIdx;
+  // Cerca per codice magazzino
+  if(it.codM){
+    for(var i=0;i<rows.length;i++){
+      if(rows[i] && rows[i].codM === it.codM) return i;
+    }
+  }
+  // Cerca per codice fornitore + desc
+  if(it.codF){
+    for(var i=0;i<rows.length;i++){
+      if(rows[i] && rows[i].codF === it.codF) return i;
+    }
+  }
+  return -1;
+}
+
+function openSchedaFromOrdine(gi, ii){
+  var ord = ordini[gi];
+  if(!ord || !ord.items[ii]) return;
+  var it = ord.items[ii];
+  var idx = _findRowIdx(it);
+  if(idx >= 0){
+    openSchedaRapida(idx);
+  } else {
+    showToastGen('orange','Articolo non trovato nel database');
+  }
 }
