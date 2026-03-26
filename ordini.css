@@ -294,3 +294,18 @@ body.light-mode .dao-group-header { border-color:#ddd; }
 .ord-card--done .ord-total-value { color: #68d391; }
 .ord-card--done .ord-cliente-nome { color: #999; }
 .ord-card--done .ord-item-codes span { color: #555; }
+
+/* ── Select unità misura ordini ── */
+.ord-unit-select {
+  display: block; margin: 0 auto;
+  background: #111; border: none; color: #888;
+  font-size: 10px; font-weight: 600; text-align: center;
+  cursor: pointer; outline: none; padding: 0;
+  -webkit-appearance: none; appearance: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ord-unit-select:focus { color: var(--accent); }
+.ord-unit-select option {
+  background: #111; color: #ccc;
+}

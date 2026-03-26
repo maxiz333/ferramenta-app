@@ -233,7 +233,8 @@ function _initLockListener(){
   _fbDb.ref('locks').on('value', function(snap){
     var d = snap.val();
     _ordLocks = d || {};
-    // Aggiorna UI ordini se tab attiva
+    // NON re-renderizzare se c'è un editing inline attivo
+    if(document.querySelector('.ord-inline-input')) return;
     var t = document.getElementById('to');
     if(t && t.classList.contains('active')){
       try{ renderOrdini(); }catch(e){}

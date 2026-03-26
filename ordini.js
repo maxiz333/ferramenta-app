@@ -151,10 +151,12 @@ function chiudiEditOrdine(){document.getElementById('edit-ord-overlay').style.di
 
 // --- INLINE EDIT ORDINI (doppio click su cella) ----------------
 function ordInlineEdit(el, gi, ii, field){
-  if(el.querySelector && el.querySelector('input')) return;
+  // Evita doppia apertura
+  if(el._editing) return;
+  if(el.querySelector && el.querySelector('input.ord-inline-input')) return;
   var ord = ordini[gi];
   if(!ord || !ord.items[ii]) return;
-  ordLock(ord.id);
+  el._editing = true;
   var it = ord.items[ii];
   var oldVal = '';
   var inputType = 'text';
@@ -162,17 +164,14 @@ function ordInlineEdit(el, gi, ii, field){
   else if(field === 'price'){ oldVal = it.prezzoUnit || ''; inputType = 'text'; }
   else if(field === 'codF'){ oldVal = it.codF || ''; }
 
-  var inp = document.createElement('input');
-  inp.type = inputType;
-  inp.value = oldVal;
-  inp.className = 'ord-inline-input';
-  if(field === 'qty'){ inp.min = '0.5'; inp.step = '0.5'; }
-  el.innerHTML = '';
-  el.appendChild(inp);
-  inp.focus();
-  inp.select();
+  // Salva HTML originale per ripristino
+  var origHTML = el.innerHTML;
+  el.innerHTML = '<input type="'+inputType+'" value="'+oldVal+'" class="ord-inline-input"'+(field==='qty'?' min="0.5" step="0.5"':'')+'>';
+  var inp = el.querySelector('input');
+  setTimeout(function(){ inp.focus(); inp.select(); }, 50);
 
   function save(){
+    el._editing = false;
     var v = inp.value.trim();
     if(field === 'qty'){
       var nq = parseFloat(v);
@@ -183,14 +182,12 @@ function ordInlineEdit(el, gi, ii, field){
     } else if(field === 'codF'){
       it.codF = v;
     }
-    // Ricalcola totale
     var tot = ord.items.reduce(function(s,x){ return s + parsePriceIT(x.prezzoUnit)*parseFloat(x.qty||0); },0);
     ord.totale = tot.toFixed(2);
     ord.modificato = true;
     ord.modificatoAt = new Date().toLocaleString('it-IT');
     ord.modificatoAtISO = new Date().toISOString();
     saveOrdini();
-    // Aggiorna carrello collegato
     var linkedCart = carrelli.find(function(c){ return c.ordId === ord.id; });
     if(linkedCart){ linkedCart.items = JSON.parse(JSON.stringify(ord.items)); saveCarrelli(); }
     renderOrdini();
@@ -574,8 +571,17 @@ function renderOrdini(){
         if(it.daOrdinare) h+='<div class="ord-item-daord">🚚 DA ORDINARE</div>';
         h+='</div>';
 
-        // Quantità — dblclick per editare
-        h+='<div class="ord-gc-qty'+(_canEdit?' ord-editable':'')+'"'+(_canEdit?' onclick="ordInlineEdit(this,'+gi+','+ii+',\'qty\')" title="Tap per modificare"':'')+'>'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
+        // Quantità + unità nella stessa cella
+        h+='<div class="ord-gc-qty'+(_canEdit?' ord-editable':'')+'"'+(_canEdit?' onclick="ordInlineEdit(this,'+gi+','+ii+',\'qty\')" title="Tap per modificare"':'')+'>'+q;
+        if(_canEdit){
+          h+='<select class="ord-unit-select" onclick="event.stopPropagation()" onchange="ordSetUnit('+gi+','+ii+',this.value)">';
+          var units=['pz','mt','kg','lt','cf','ml','gr','mm','cm','m\xB2','m\xB3'];
+          units.forEach(function(u){ h+='<option value="'+u+'"'+(u===(it.unit||'pz')?' selected':'')+'>'+u+'</option>'; });
+          h+='</select>';
+        } else {
+          h+='<span class="ord-unit">'+esc(it.unit||'pz')+'</span>';
+        }
+        h+='</div>';
 
         // Prezzo unitario — con sconto sbarrato se presente
         h+='<div class="ord-gc-price'+(_canEdit?' ord-editable':'')+'"'+(_canEdit?' onclick="ordInlineEdit(this,'+gi+','+ii+',\'price\')" title="Tap per modificare"':'')+'>';
@@ -866,7 +872,6 @@ var _cassaOrdId=null;
 
 function openCassa(gi){
   var ord=ordini[gi];
-  if(ord) ordLock(ord.id);
   if(!ord)return;
   _cassaOrdId=ord.id;
   document.getElementById('cassa-cliente').textContent=ord.nomeCliente||'Cliente';
@@ -2132,3 +2137,12 @@ function _ordRecalcSave(gi){
 
 // ── SBLOCCA/RIBLOCCA ordine completato per modifiche ─────────────
 // Usa ordSblocca/ordBlocca definiti sopra
+
+// ── Cambia unità di misura ordine ────────────────────────────────
+function ordSetUnit(gi, ii, val){
+  var ord=ordini[gi]; if(!ord||!ord.items[ii]) return;
+  ord.items[ii].unit=val;
+  ord.modificato=true;
+  ord.modificatoAt=new Date().toLocaleString('it-IT');
+  saveOrdini(); renderOrdini();
+}
