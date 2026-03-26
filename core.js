@@ -235,6 +235,7 @@ document.addEventListener('DOMContentLoaded', function(){
     });
     _fbDb=firebase.database();
     _fbReady=true;
+    _initLockListener();
     // Snapshot degli ID gi- presenti PRIMA di connettersi - cos- al primo sync non scattano notifiche
     var _idKnown={};
     ordini.forEach(function(o){if(o&&o.id)_idKnown[o.id]=true;});
@@ -252,7 +253,7 @@ document.addEventListener('DOMContentLoaded', function(){
       _fbSyncing=true;
       try{
         ordini=fresh;lsSet(ORDK,ordini);updateOrdBadge();updateOrdCounter();
-        var t=document.getElementById('to');if(t&&t.classList.contains('active'))renderOrdini();
+        var t=document.getElementById('to');if(t&&t.classList.contains('active')&&!document.querySelector('.ord-inline-input'))renderOrdini();
         // Solo ordini con stato 'nuovo' che NON erano gi- noti
         var nuovi=fresh.filter(function(o){return o.stato==='nuovo'&&!_idKnown[o.id];});
         if(nuovi.length){
@@ -393,6 +394,53 @@ function loadMagazzinoFB(){
     _magExtLoaded = false;
     _hideLoadingBar();
     showToastGen('red','❌ Errore Firebase: '+(err?err.message:'sconosciuto'));
+  });
+}
+
+
+// ══ LOCK COLLABORATIVO ORDINI ═══════════════════════════════════
+var LOCK_EXPIRE = 5 * 60 * 1000; // 5 minuti
+var _ordLocks = {};
+var _deviceId = localStorage.getItem('cp4_deviceId') || ('dev_' + Date.now() + '_' + Math.random().toString(36).substr(2,6));
+localStorage.setItem('cp4_deviceId', _deviceId);
+var _deviceName = localStorage.getItem('cp4_deviceName') || _deviceId;
+
+function _lockKey(ordId){ return String(ordId).replace(/[.#$/\[\]]/g, '_'); }
+
+function ordLock(ordId){
+  if(!_fbReady || !_fbDb) return;
+  var key = _lockKey(ordId);
+  var lock = { by: _deviceId, name: _deviceName, at: Date.now() };
+  _ordLocks[key] = lock;
+  try{ _fbDb.ref('locks/' + key).set(lock); }catch(e){ console.error('ordLock err:', e); }
+}
+
+function ordUnlock(ordId){
+  var key = _lockKey(ordId);
+  delete _ordLocks[key];
+  if(_fbReady && _fbDb) try{ _fbDb.ref('locks/' + key).remove(); }catch(e){}
+}
+
+function ordIsLockedByOther(ordId){
+  var key = _lockKey(ordId);
+  var lock = _ordLocks[key];
+  if(!lock) return false;
+  if(lock.by === _deviceId) return false;
+  if(Date.now() - lock.at > LOCK_EXPIRE) return false;
+  return lock;
+}
+
+function _initLockListener(){
+  if(!_fbReady || !_fbDb) return;
+  _fbDb.ref('locks').on('value', function(snap){
+    var d = snap.val();
+    _ordLocks = d || {};
+    // NON re-renderizzare se c'è un editing inline attivo
+    if(document.querySelector('.ord-inline-input')) return;
+    var t = document.getElementById('to');
+    if(t && t.classList.contains('active')){
+      try{ renderOrdini(); }catch(e){}
+    }
   });
 }
 
