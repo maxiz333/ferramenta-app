@@ -283,7 +283,6 @@ body.light-mode .dao-group-header { border-color:#ddd; }
 
 /* ── Ordine completato bloccato ── */
 .ord-card--done {
-  opacity: .55;
   background: #0a120a !important;
   border-color: #38a16933 !important;
   border-top-color: #38a16966 !important;
@@ -294,4 +293,4 @@ body.light-mode .dao-group-header { border-color:#ddd; }
 .ord-card--done .ord-gc-sub { color: #68d391; }
 .ord-card--done .ord-total-value { color: #68d391; }
 .ord-card--done .ord-cliente-nome { color: #999; }
-.ord-card--done .ord-item-codes span { opacity: .5; }
+.ord-card--done .ord-item-codes span { color: #555; }

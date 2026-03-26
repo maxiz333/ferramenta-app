@@ -154,6 +154,7 @@ function ordInlineEdit(el, gi, ii, field){
   if(el.querySelector && el.querySelector('input')) return;
   var ord = ordini[gi];
   if(!ord || !ord.items[ii]) return;
+  ordLock(ord.id);
   var it = ord.items[ii];
   var oldVal = '';
   var inputType = 'text';
@@ -865,6 +866,7 @@ var _cassaOrdId=null;
 
 function openCassa(gi){
   var ord=ordini[gi];
+  if(ord) ordLock(ord.id);
   if(!ord)return;
   _cassaOrdId=ord.id;
   document.getElementById('cassa-cliente').textContent=ord.nomeCliente||'Cliente';
@@ -2129,15 +2131,4 @@ function _ordRecalcSave(gi){
 }
 
 // ── SBLOCCA/RIBLOCCA ordine completato per modifiche ─────────────
-function ordSbloccaFatto(gi){
-  var ord=ordini[gi]; if(!ord) return;
-  ord._unlocked=true;
-  saveOrdini(); renderOrdini();
-  showToastGen('orange','🔓 Ordine sbloccato per modifiche');
-}
-function ordRibloccaFatto(gi){
-  var ord=ordini[gi]; if(!ord) return;
-  delete ord._unlocked;
-  saveOrdini(); renderOrdini();
-  showToastGen('green','🔒 Ordine ribloccato');
-}
+// Usa ordSblocca/ordBlocca definiti sopra
