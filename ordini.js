@@ -2307,11 +2307,11 @@ function openSchedaRapida(rowIdx){
     h += '<div style="padding:0 16px 10px;font-size:12px;color:#aaa;line-height:1.4;">'+esc(m.specs)+'</div>';
   }
   
-  // Posizione — editabile
-  h += '<div style="padding:8px 16px;border-top:1px solid #2a2a2a;">';
-  h += '<label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;">Posizione</label>';
-  h += '<input type="text" id="sr-pos" value="'+esc(m.posizione||'')+'" placeholder="Es. corsia 3, scaffale B" ';
-  h += 'style="width:100%;padding:6px 8px;margin-top:4px;border:1px solid #2a2a2a;border-radius:6px;background:#111;color:#888;font-size:11px;font-weight:600;box-sizing:border-box;outline:none;" ';
+  // Posizione — piccola, discreta, editabile
+  h += '<div style="padding:4px 16px 6px;display:flex;align-items:center;gap:6px;">';
+  h += '<span style="font-size:9px;color:#555;">📍</span>';
+  h += '<input type="text" id="sr-pos" value="'+esc(m.posizione||'')+'" placeholder="posizione..." ';
+  h += 'style="flex:1;padding:3px 6px;border:none;border-bottom:1px dashed #333;background:transparent;color:#666;font-size:10px;box-sizing:border-box;outline:none;" ';
   h += 'onchange="salvaPosizioneRapida('+rowIdx+',this.value)">';
   h += '</div>';
   

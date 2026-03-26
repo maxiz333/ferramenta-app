@@ -487,3 +487,22 @@ body.light-mode #fatture-popup button { color: #444; }
   --pos-muted:     #7a7d82;
 }
 
+
+/* ══ AUTH LOGIN ══════════════════════════════════════════════════ */
+.auth-dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid #444; background: transparent;
+  transition: background .15s, border-color .15s;
+}
+.auth-dot--on {
+  background: var(--accent); border-color: var(--accent);
+}
+.auth-key {
+  padding: 14px; border-radius: 10px;
+  border: 1px solid #2a2a2a; background: #1a1a1a;
+  color: #eee; font-size: 20px; font-weight: 700;
+  cursor: pointer; touch-action: manipulation;
+  min-height: 50px;
+  -webkit-tap-highlight-color: transparent;
+}
+.auth-key:active { background: #2a2a2a; }

@@ -184,64 +184,6 @@ function _fbSaveArticolo(idx){
   }catch(e){ console.error('Firebase save articolo:', e); }
 }
 
-// ══ LOCK COLLABORATIVO ORDINI ════════════════════════════════════
-// Chi apre un ordine lo "blocca" su Firebase per 5 minuti.
-// L'altro utente vede un overlay "In lavorazione" e può forzare con doppio tap.
-var LOCK_EXPIRE = 5 * 60 * 1000; // 5 minuti
-var _deviceId = localStorage.getItem('cp4_deviceId');
-if(!_deviceId){
-  _deviceId = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
-  localStorage.setItem('cp4_deviceId', _deviceId);
-}
-var _deviceName = localStorage.getItem('cp4_deviceName') || '';
-var _ordLocks = {}; // ordId -> {by, name, at}
-
-function setDeviceName(name){
-  _deviceName = name;
-  localStorage.setItem('cp4_deviceName', name);
-}
-
-function _lockKey(ordId){ return String(ordId).replace(/[.#$/\[\]]/g, '_'); }
-
-function ordLock(ordId){
-  if(!_fbReady || !_fbDb || !ordId) return;
-  var key = _lockKey(ordId);
-  var lock = { by: _deviceId, name: _deviceName || _deviceId, at: Date.now(), ordId: ordId };
-  _ordLocks[key] = lock;
-  try{ _fbDb.ref('locks/' + key).set(lock); }catch(e){ console.error('ordLock err:', e); }
-}
-
-function ordUnlock(ordId){
-  if(!_fbReady || !_fbDb || !ordId) return;
-  var key = _lockKey(ordId);
-  delete _ordLocks[key];
-  try{ _fbDb.ref('locks/' + key).remove(); }catch(e){}
-}
-
-function ordIsLockedByOther(ordId){
-  var key = _lockKey(ordId);
-  var lock = _ordLocks[key];
-  if(!lock) return false;
-  if(lock.by === _deviceId) return false;
-  if(Date.now() - lock.at > LOCK_EXPIRE) return false;
-  return lock;
-}
-
-// Ascolta i lock in tempo reale da Firebase
-function _initLockListener(){
-  if(!_fbReady || !_fbDb) return;
-  _fbDb.ref('locks').on('value', function(snap){
-    var d = snap.val();
-    _ordLocks = d || {};
-    // NON re-renderizzare se c'è un editing inline attivo
-    if(document.querySelector('.ord-inline-input')) return;
-    var t = document.getElementById('to');
-    if(t && t.classList.contains('active')){
-      try{ renderOrdini(); }catch(e){}
-    }
-  });
-}
-
 // Traccia ultimo articolo modificato per sync automatico
 var _lastModifiedIdx = null;
 
@@ -276,6 +218,8 @@ document.addEventListener('DOMContentLoaded', function(){
 // Mostra indicatore di caricamento subito, prima ancora di connettersi
 document.addEventListener('DOMContentLoaded', function(){
   _showLoadingBar('Connessione al database...');
+  // Mostra login dopo un attimo (aspetta che Firebase carichi i PIN)
+  setTimeout(_authInit, 800);
 });
 
 (function(){
@@ -308,7 +252,7 @@ document.addEventListener('DOMContentLoaded', function(){
       _fbSyncing=true;
       try{
         ordini=fresh;lsSet(ORDK,ordini);updateOrdBadge();updateOrdCounter();
-        var t=document.getElementById('to');if(t&&t.classList.contains('active')&&!document.querySelector('.ord-inline-input'))renderOrdini();
+        var t=document.getElementById('to');if(t&&t.classList.contains('active'))renderOrdini();
         // Solo ordini con stato 'nuovo' che NON erano gi- noti
         var nuovi=fresh.filter(function(o){return o.stato==='nuovo'&&!_idKnown[o.id];});
         if(nuovi.length){
@@ -343,8 +287,6 @@ document.addEventListener('DOMContentLoaded', function(){
     }
 
     console.log('Firebase connesso');
-    // Avvia listener lock collaborativo
-    _initLockListener();
   }catch(e){console.error('Firebase:',e);_hideLoadingBar();}
 })();
 
@@ -454,3 +396,252 @@ function loadMagazzinoFB(){
   });
 }
 
+
+// ══ ACCOUNT / RUOLI CON PIN ═════════════════════════════════════
+var AUTH_K = 'cp4_auth';
+var _currentUser = null;
+
+// Ruoli e permessi
+var _roles = {
+  prop1: { nome:'Proprietario 1', ruolo:'proprietario', pin:'', tabs:'*' },
+  prop2: { nome:'Proprietario 2', ruolo:'proprietario', pin:'', tabs:'*' },
+  comm1: { nome:'Commesso 1', ruolo:'commesso', pin:'',
+    tabs:['tc','to','t0','t11','t10','t1','t7','t9','t-ordfor'],
+    altro:['atb-t11','atb-t10','atb-t12'],
+    bottom:['tbb-tc','tbb-to','tbb-t0','tbb-t1','tbb-taltro']
+  },
+  comm2: { nome:'Commesso 2', ruolo:'commesso', pin:'',
+    tabs:['tc','to','t0','t11','t10','t1','t7','t9','t-ordfor'],
+    altro:['atb-t11','atb-t10','atb-t12'],
+    bottom:['tbb-tc','tbb-to','tbb-t0','tbb-t1','tbb-taltro']
+  }
+};
+
+// Carica PIN e nomi salvati da Firebase
+function _authLoad(){
+  var saved = lsGet(AUTH_K, null);
+  if(saved){
+    Object.keys(saved).forEach(function(k){
+      if(_roles[k]){
+        if(saved[k].pin) _roles[k].pin = saved[k].pin;
+        if(saved[k].nome) _roles[k].nome = saved[k].nome;
+      }
+    });
+  }
+  // Carica anche da Firebase
+  if(_fbReady && _fbDb){
+    _fbDb.ref('auth').once('value', function(snap){
+      var d = snap.val();
+      if(d){
+        Object.keys(d).forEach(function(k){
+          if(_roles[k]){
+            if(d[k].pin) _roles[k].pin = d[k].pin;
+            if(d[k].nome) _roles[k].nome = d[k].nome;
+          }
+        });
+        _authSaveLocal();
+        // Aggiorna nomi sulla schermata login se visibile
+        _authRenderLogin();
+      }
+    });
+  }
+}
+
+function _authSaveLocal(){
+  var data = {};
+  Object.keys(_roles).forEach(function(k){
+    data[k] = { pin: _roles[k].pin, nome: _roles[k].nome };
+  });
+  lsSet(AUTH_K, data);
+}
+
+function _authSaveFirebase(){
+  _authSaveLocal();
+  if(_fbReady && _fbDb){
+    var data = {};
+    Object.keys(_roles).forEach(function(k){
+      data[k] = { pin: _roles[k].pin, nome: _roles[k].nome };
+    });
+    try{ _fbDb.ref('auth').set(data); }catch(e){}
+  }
+}
+
+// Schermata login
+function _authShowLogin(){
+  var ov = document.getElementById('auth-login-ov');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'auth-login-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+    document.body.appendChild(ov);
+  }
+  ov.style.display = 'flex';
+  _authRenderLogin();
+}
+
+function _authRenderLogin(){
+  var ov = document.getElementById('auth-login-ov');
+  if(!ov || ov.style.display === 'none') return;
+  var h = '<div style="text-align:center;max-width:340px;width:90%;">';
+  h += '<div style="font-size:28px;font-weight:900;color:var(--accent);margin-bottom:6px;">RATTAZZI</div>';
+  h += '<div style="font-size:12px;color:#555;margin-bottom:30px;">Seleziona il tuo account</div>';
+  
+  Object.keys(_roles).forEach(function(k){
+    var r = _roles[k];
+    var icon = r.ruolo === 'proprietario' ? '👑' : '👤';
+    var color = r.ruolo === 'proprietario' ? 'var(--accent)' : '#888';
+    h += '<button onclick="_authSelectUser(\''+k+'\')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px 18px;margin-bottom:8px;border-radius:12px;border:1px solid #2a2a2a;background:#1a1a1a;cursor:pointer;touch-action:manipulation;text-align:left;">';
+    h += '<span style="font-size:24px;">'+icon+'</span>';
+    h += '<div style="flex:1"><div style="font-size:14px;font-weight:800;color:'+color+';">'+esc(r.nome)+'</div>';
+    h += '<div style="font-size:10px;color:#555;text-transform:uppercase;">'+r.ruolo+'</div></div>';
+    h += '</button>';
+  });
+  
+  h += '</div>';
+  ov.innerHTML = h;
+}
+
+// Utente selezionato — mostra numpad PIN
+function _authSelectUser(key){
+  var r = _roles[key];
+  if(!r) return;
+  
+  // Se non ha PIN, chiedi di crearlo
+  if(!r.pin){
+    _authSetupPin(key);
+    return;
+  }
+  
+  var ov = document.getElementById('auth-login-ov');
+  var h = '<div style="text-align:center;max-width:300px;width:90%;">';
+  h += '<div style="font-size:20px;font-weight:800;color:var(--accent);margin-bottom:4px;">'+esc(r.nome)+'</div>';
+  h += '<div style="font-size:11px;color:#555;margin-bottom:20px;">Inserisci PIN</div>';
+  h += '<div id="auth-pin-dots" style="display:flex;justify-content:center;gap:12px;margin-bottom:20px;">';
+  h += '<span class="auth-dot"></span><span class="auth-dot"></span><span class="auth-dot"></span><span class="auth-dot"></span>';
+  h += '</div>';
+  h += '<div id="auth-pin-error" style="font-size:11px;color:#e53e3e;min-height:18px;margin-bottom:10px;"></div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:220px;margin:0 auto;">';
+  for(var i=1;i<=9;i++) h += '<button class="auth-key" onclick="_authPinKey(\''+i+'\')">'+i+'</button>';
+  h += '<button class="auth-key" onclick="_authBack()" style="font-size:12px;">←</button>';
+  h += '<button class="auth-key" onclick="_authPinKey(\'0\')">0</button>';
+  h += '<button class="auth-key" onclick="_authPinKey(\'del\')" style="font-size:11px;">⌫</button>';
+  h += '</div>';
+  h += '</div>';
+  ov.innerHTML = h;
+  
+  ov._authKey = key;
+  ov._authPin = '';
+}
+
+var _authPinBuffer = '';
+
+function _authPinKey(k){
+  var ov = document.getElementById('auth-login-ov');
+  if(!ov) return;
+  
+  if(k === 'del'){
+    _authPinBuffer = _authPinBuffer.slice(0,-1);
+  } else {
+    if(_authPinBuffer.length >= 4) return;
+    _authPinBuffer += k;
+  }
+  
+  // Aggiorna pallini
+  var dots = document.querySelectorAll('.auth-dot');
+  dots.forEach(function(d,i){ d.classList.toggle('auth-dot--on', i < _authPinBuffer.length); });
+  
+  // Se 4 cifre, verifica
+  if(_authPinBuffer.length === 4){
+    var key = ov._authKey;
+    var r = _roles[key];
+    if(_authPinBuffer === r.pin){
+      // Login OK
+      _currentUser = { key:key, nome:r.nome, ruolo:r.ruolo };
+      _deviceName = r.nome;
+      localStorage.setItem('cp4_deviceName', r.nome);
+      localStorage.setItem('cp4_lastUser', key);
+      ov.style.display = 'none';
+      _authApplyRole();
+      showToastGen('green','Benvenuto '+r.nome+'!');
+    } else {
+      // PIN errato
+      var err = document.getElementById('auth-pin-error');
+      if(err) err.textContent = 'PIN errato';
+      _authPinBuffer = '';
+      setTimeout(function(){
+        var dots2 = document.querySelectorAll('.auth-dot');
+        dots2.forEach(function(d){ d.classList.remove('auth-dot--on'); });
+      }, 300);
+    }
+  }
+}
+
+function _authBack(){
+  _authPinBuffer = '';
+  _authRenderLogin();
+}
+
+// Setup PIN per la prima volta
+function _authSetupPin(key){
+  var r = _roles[key];
+  var nome = prompt('Nome per questo account:', r.nome);
+  if(!nome) return;
+  r.nome = nome.trim();
+  
+  var pin = prompt('Crea un PIN a 4 cifre:');
+  if(!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)){ showToastGen('red','PIN deve essere 4 cifre'); return; }
+  r.pin = pin;
+  
+  _authSaveFirebase();
+  showToastGen('green','Account "'+r.nome+'" creato!');
+  _authRenderLogin();
+}
+
+// Applica visibilità tab in base al ruolo
+function _authApplyRole(){
+  if(!_currentUser) return;
+  var role = _roles[_currentUser.key];
+  if(!role) return;
+  
+  // Proprietario vede tutto
+  if(role.tabs === '*') return;
+  
+  // Nascondi tab nella bottom bar
+  var allBottom = document.querySelectorAll('.tab-bottom-btn');
+  allBottom.forEach(function(btn){
+    var id = btn.id;
+    if(role.bottom && role.bottom.indexOf(id) >= 0){
+      btn.style.display = '';
+    } else if(role.bottom){
+      btn.style.display = 'none';
+    }
+  });
+  
+  // Nascondi bottoni nel menu Altro
+  var allAltro = document.querySelectorAll('.altro-btn');
+  allAltro.forEach(function(btn){
+    var id = btn.id;
+    if(!id) return;
+    if(role.altro && role.altro.indexOf(id) >= 0){
+      btn.style.display = '';
+    } else if(role.altro){
+      btn.style.display = 'none';
+    }
+  });
+  
+  // Theme toggle sempre visibile
+  var themeBtn = document.getElementById('theme-toggle-btn');
+  if(themeBtn) themeBtn.style.display = '';
+}
+
+// Auto-login se ultimo utente salvato
+function _authInit(){
+  _authLoad();
+  var last = localStorage.getItem('cp4_lastUser');
+  if(last && _roles[last] && _roles[last].pin){
+    // Mostra login con ultimo utente pre-selezionato
+    _authShowLogin();
+  } else {
+    _authShowLogin();
+  }
+}
