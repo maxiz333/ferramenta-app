@@ -735,10 +735,14 @@ function renderOrdini(){
 
       h+='</div>';
 
-      // Nota ordine editabile (prima del totale)
-      h+='<div class="ord-nota-edit" style="padding:4px 12px;">';
-      h+='<input type="text" class="ord-nota-input" value="'+esc(ord.nota||'')+'" placeholder="📋 Nota ordine..." onchange="ordSetNotaOrdine('+gi+',this.value)" onclick="event.stopPropagation()">';
-      h+='</div>';
+      // Nota ordine — editabile se sbloccato, gialla fissa se bloccato
+      if(_canEdit){
+        h+='<div class="ord-nota-edit" style="padding:4px 12px;">';
+        h+='<input type="text" class="ord-nota-input" value="'+esc(ord.nota||'')+'" placeholder="📋 Nota ordine..." onchange="ordSetNotaOrdine('+gi+',this.value)" onclick="event.stopPropagation()">';
+        h+='</div>';
+      } else if(ord.nota){
+        h+='<div style="padding:6px 12px;font-size:13px;color:var(--accent);font-weight:700;">📋 '+esc(ord.nota)+'</div>';
+      }
 
       // ── TOTALE ORDINE — grande e visibile ──
       h+='<div class="ord-total-bar">';

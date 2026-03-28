@@ -110,6 +110,7 @@ var CT = {
   },
 
   // ── RENDER lista cartellini ───────────────────────────────────────
+  // ── RENDER lista cartellini — formato tabella compatta ──────────
   render: function(){
     var list   = document.getElementById('ct-list');
     var empty  = document.getElementById('ct-empty');
@@ -128,59 +129,78 @@ var CT = {
     list.style.display  = 'block';
     if(footer) footer.style.display = 'flex';
 
-    var h = '';
+    var h = '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
+    h += '<thead><tr style="background:#1a1a1a;position:sticky;top:110px;z-index:10;">';
+    h += '<th style="padding:6px 4px;text-align:left;color:var(--accent);font-size:10px;">Prodotto</th>';
+    h += '<th style="padding:6px 2px;text-align:center;color:#888;font-size:10px;width:52px;">Cod.F</th>';
+    h += '<th style="padding:6px 2px;text-align:center;color:#888;font-size:10px;width:48px;">\u20AC Vec</th>';
+    h += '<th style="padding:6px 2px;text-align:center;color:var(--accent);font-size:10px;width:54px;">\u20AC Nuovo</th>';
+    h += '<th style="padding:6px 2px;text-align:center;color:#888;font-size:10px;width:32px;">Dim</th>';
+    h += '<th style="padding:6px 2px;text-align:center;color:#888;font-size:10px;width:40px;">Col</th>';
+    h += '<th style="padding:6px 0;width:24px;"></th>';
+    h += '</tr></thead><tbody>';
+
     ctRows.forEach(function(r, i){
-      var c       = CT.color(r.giornalino||'');
+      var c = CT.color(r.giornalino||'');
       var promoOn = (r.barrato==='si' || r.promo==='si');
 
-      h += '<div id="ct-card-'+i+'" style="background:'+c.bg+';border-radius:14px;margin-bottom:10px;'
-         + 'border:1px solid '+(c.dot==='#444'?'#2a2a2a':c.dot+'44')+';border-left:4px solid '+c.dot+';overflow:hidden;">';
+      h += '<tr style="border-bottom:1px solid #222;border-left:3px solid '+c.dot+';">';
 
-      // Riga 1: Descrizione + cestino
-      h += '<div style="padding:12px 12px 6px;display:flex;align-items:flex-start;gap:8px;">';
-      h += '<div style="flex:1;min-width:0;">';
-      h += '<div style="font-size:15px;font-weight:800;color:var(--text);line-height:1.3;">'+ esc(r.desc||'—') +'</div>';
-      h += '<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap;">';
-      if(r.codF) h += '<span style="font-size:11px;color:#fc8181;font-weight:700;background:#2a0808;padding:2px 7px;border-radius:5px;">F: '+esc(r.codF)+'</span>';
-      if(r.codM) h += '<span style="font-size:11px;color:var(--accent);font-weight:700;background:#1a1600;padding:2px 7px;border-radius:5px;">M: '+esc(r.codM)+'</span>';
-      h += '</div></div>';
-      h += '<button onclick="ct_del('+i+')" style="width:40px;height:40px;border-radius:10px;border:1px solid #e53e3e33;background:transparent;color:#e53e3e88;font-size:18px;cursor:pointer;flex-shrink:0;touch-action:manipulation;">🗑️</button>';
-      h += '</div>';
+      // Prodotto
+      h += '<td style="padding:6px 4px;">';
+      h += '<div style="font-size:12px;font-weight:700;color:#e8e8e8;line-height:1.2;">'+esc(r.desc||'\u2014')+'</div>';
+      if(r.codM) h += '<div style="font-size:9px;color:var(--accent);margin-top:1px;">'+esc(r.codM)+'</div>';
+      h += '</td>';
 
-      // Riga 2: Prezzi + Promo toggle + Dimensione
-      h += '<div style="padding:0 12px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+      // Cod.F editabile
+      h += '<td style="padding:2px;text-align:center;">';
+      h += '<input type="text" value="'+esc(r.codF||'')+'" placeholder="\u2014"';
+      h += ' onchange="ct_setCodF('+i+',this.value)"';
+      h += ' style="width:100%;padding:3px 2px;border:none;border-bottom:1px dashed #333;background:transparent;color:#fc8181;font-size:10px;text-align:center;outline:none;box-sizing:border-box;">';
+      h += '</td>';
+
+      // Prezzo vecchio
+      h += '<td style="padding:2px;text-align:center;">';
       if(promoOn){
-        h += '<input type="text" value="'+esc(r.prezzoOld||'')+'" placeholder="€ vec."'
-           + ' onchange="ct_setPrezzoOld('+i+',this.value)"'
-           + ' style="width:68px;min-height:40px;padding:0 8px;border-radius:8px;border:1px solid #e53e3e44;background:#2a0808;color:#fc8181;font-size:13px;font-weight:700;text-align:center;text-decoration:line-through;">';
+        h += '<input type="text" value="'+esc(r.prezzoOld||'')+'" placeholder="\u2014"';
+        h += ' onchange="ct_setPrezzoOld('+i+',this.value)"';
+        h += ' style="width:100%;padding:3px 2px;border:none;border-bottom:1px dashed #e53e3e44;background:transparent;color:#fc8181;font-size:10px;font-weight:700;text-align:center;text-decoration:line-through;outline:none;box-sizing:border-box;">';
+      } else {
+        h += '<button onclick="ct_togglePromo('+i+')" style="border:none;background:transparent;color:#333;font-size:10px;cursor:pointer;padding:2px;">\u2702</button>';
       }
-      h += '<input type="text" value="'+esc(r.prezzo||'')+'" placeholder="€ nuovo"'
-         + ' onchange="ct_setPrezzo('+i+',this.value)"'
-         + ' style="width:80px;min-height:40px;padding:0 10px;border-radius:8px;border:1px solid var(--accent)44;background:#1a1600;color:var(--accent);font-size:16px;font-weight:900;text-align:center;">';
-      h += '<button onclick="ct_togglePromo('+i+')" title="Prezzo sbarrato"'
-         + ' style="min-height:40px;padding:0 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;'
-         + 'border:1px solid '+(promoOn?'#e53e3e88':'#333')+';background:'+(promoOn?'#2a0808':'transparent')+';color:'+(promoOn?'#fc8181':'#555')+';white-space:nowrap;">'
-         + (promoOn?'✂️ Promo ON':'✂️ Promo') +'</button>';
-      h += '<select onchange="ct_setSize('+i+',this.value)" style="min-height:40px;padding:0 8px;border-radius:8px;border:1px solid #333;background:#1a1a1a;color:#aaa;font-size:12px;cursor:pointer;">'
-         + '<option value="small"'+(r.size==='small'?' selected':'')+'>Piccolo</option>'
-         + '<option value="large"'+(r.size==='large'?' selected':'')+'>Grande</option>'
-         + '</select>';
-      h += '</div>';
+      h += '</td>';
 
-      // Riga 3: Selettore colore
-      h += '<div style="padding:0 12px 12px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">';
-      h += '<span style="font-size:11px;color:#444;">Giornalino:</span>';
+      // Prezzo nuovo
+      h += '<td style="padding:2px;text-align:center;">';
+      h += '<input type="text" value="'+esc(r.prezzo||'')+'" placeholder="\u20AC"';
+      h += ' onchange="ct_setPrezzo('+i+',this.value)"';
+      h += ' style="width:100%;padding:3px 2px;border:none;border-bottom:1px solid var(--accent)44;background:transparent;color:var(--accent);font-size:12px;font-weight:900;text-align:center;outline:none;box-sizing:border-box;">';
+      h += '</td>';
+
+      // Dimensione
+      h += '<td style="padding:2px;text-align:center;">';
+      h += '<select onchange="ct_setSize('+i+',this.value)" style="width:100%;padding:1px;border:none;background:transparent;color:#888;font-size:9px;outline:none;-webkit-appearance:none;appearance:none;text-align:center;cursor:pointer;">';
+      h += '<option value="small"'+(r.size==='small'?' selected':'')+'>P</option>';
+      h += '<option value="large"'+(r.size==='large'?' selected':'')+'>G</option>';
+      h += '</select></td>';
+
+      // Colore tendina
+      h += '<td style="padding:2px;text-align:center;">';
+      h += '<select onchange="ct_setColor('+i+',this.value)" style="width:100%;padding:1px;border:none;background:'+c.bg+';color:'+c.dot+';font-size:9px;font-weight:800;outline:none;border-radius:4px;cursor:pointer;">';
       CT.COLORS.forEach(function(col){
-        var sel = (r.giornalino||'')=== col.val;
-        h += '<button onclick="ct_setColor('+i+',\''+col.val+'\')" title="'+col.label+'"'
-           + ' style="width:32px;height:32px;border-radius:50%;border:'+(sel?'3px solid #fff':'2px solid transparent')+';background:'+col.dot
-           + ';cursor:pointer;touch-action:manipulation;transform:'+(sel?'scale(1.25)':'scale(1)')+';transition:transform .12s;"></button>';
+        h += '<option value="'+col.val+'" style="background:#111;color:'+col.dot+';"'+(((r.giornalino||'')===col.val)?' selected':'')+'>'+col.label+'</option>';
       });
-      h += '</div>';
+      h += '</select></td>';
 
-      h += '</div>';
+      // Elimina
+      h += '<td style="padding:2px;text-align:center;">';
+      h += '<button onclick="ct_del('+i+')" style="border:none;background:transparent;color:#e53e3e66;font-size:14px;cursor:pointer;padding:0;touch-action:manipulation;">\u2715</button>';
+      h += '</td>';
+
+      h += '</tr>';
     });
 
+    h += '</tbody></table>';
     list.innerHTML = h;
     CT.updateDashboard();
   },
@@ -222,6 +242,23 @@ function ct_setColor(i, val){
   if(!ctRows[i]) return;
   ctRows[i].giornalino = val;
   CT.save(); CT.render();
+}
+
+function ct_setCodF(i, val){
+  if(!ctRows[i]) return;
+  ctRows[i].codF = val.trim();
+  CT.save();
+  // Salva anche nel database se l'articolo esiste e non aveva codF
+  if(ctRows[i].codM){
+    for(var j = 0; j < rows.length; j++){
+      if(rows[j] && rows[j].codM === ctRows[i].codM && !rows[j].codF && val.trim()){
+        rows[j].codF = val.trim();
+        lsSet(SK, rows);
+        if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(j);
+        break;
+      }
+    }
+  }
 }
 
 function ct_setPrezzo(i, val){
@@ -296,7 +333,7 @@ function ct_genAnteprima(){
   var pc = document.getElementById('pc');
   if(pc) pc.innerHTML = html;
   var pov = document.getElementById('pov');
-  if(pov) pov.classList.add('open');
+  if(pov){ pov.classList.add('open'); pov.scrollTop = 0; }
   if(typeof _scalePrevContainer==='function') _scalePrevContainer();
 }
 
@@ -409,28 +446,107 @@ document.addEventListener('click', function(e){
 });
 
 // ── Integrazione con import CSV ──────────────────────────────────────────────
-// Dopo confirmImp, i cartellini dal CSV finiscono in rows[].
-// Li migriamo in ctRows[] e ripristiniamo rows[] al database Firebase.
+// Override di confirmImp: il CSV aggiunge ai cartellini (ctRows)
+// e aggiorna SOLO il codF nel database se mancava (mai sovrascrive desc/prezzo)
 var confirmImp = (function(_ci_orig){
   return function(){
-    var rowsBefore = rows.slice(); // backup database corrente
-    _ci_orig(); // esegue l'import (modifica rows)
-    // Dopo import: rows contiene i cartellini importati + eventuali dati DB
-    // Estrai solo i nuovi cartellini (quelli con prezzo, aggiunti dall'import vecchio formato)
-    var rowsAfter = rows;
-    if(rowsAfter !== rowsBefore && rowsAfter.length <= 500){
-      // Formato vecchio: rows = solo cartellini — migrali in ctRows
-      rowsAfter.forEach(function(r){ ctRows.push(Object.assign({},r)); });
-      rows = rowsBefore; // ripristina il database Firebase
+    // Formato nuovo con pendingImportDB
+    if(typeof pendingImportDB !== 'undefined' && pendingImportDB && pendingImportDB.length){
+      var aggiornatiCodF = 0;
+      var prezziGiornalino = 0;
+
+      pendingImportDB.forEach(function(r){
+        var coloreValido = ['rosso','verde','blu','giallo','viola','arancio','grigio'];
+        var colore = r.giornalino && coloreValido.indexOf(r.giornalino) >= 0 ? r.giornalino : '';
+
+        // Cerca l'articolo nel database per codM
+        var dbIdx = -1;
+        var dbRow = null;
+        if(r.codM){
+          for(var i = 0; i < rows.length; i++){
+            if(rows[i] && rows[i].codM === r.codM){
+              dbIdx = i; dbRow = rows[i]; break;
+            }
+          }
+        }
+
+        // Usa il nome dal DATABASE (non dal CSV) se l'articolo esiste
+        var descFinale = (dbRow && dbRow.desc) ? dbRow.desc : (r.desc || '');
+        // Prezzo: usa quello del CSV per il cartellino
+        var prezzoCartellino = r.pv || '';
+        // Prezzo vecchio: se il database ha un prezzo diverso, quello diventa il vecchio
+        var prezzoVecchio = '';
+        if(dbRow && dbRow.prezzo && prezzoCartellino && dbRow.prezzo !== prezzoCartellino){
+          prezzoVecchio = dbRow.prezzo;
+          prezziGiornalino++;
+        }
+
+        // Aggiungi al cartellino con il NOME del database
+        var newRow = {
+          data: new Date().toLocaleDateString('it-IT'),
+          desc: descFinale,
+          codF: r.codF || '',
+          codM: r.codM || '',
+          prezzoOld: prezzoVecchio,
+          prezzo: prezzoCartellino,
+          size: (typeof autoSize === 'function') ? autoSize(prezzoCartellino || '0') : 'small',
+          note: '',
+          giornalino: colore,
+          barrato: prezzoVecchio ? 'si' : 'no',
+          promo: prezzoVecchio ? 'si' : 'no',
+          priceHistory: []
+        };
+        ctRows.push(newRow);
+
+        // Aggiorna il database SOLO: codF se mancava
+        if(dbIdx >= 0 && dbRow){
+          var changed = false;
+          // CodF: salva se il prodotto non ce l'aveva
+          if(r.codF && !dbRow.codF){
+            dbRow.codF = r.codF;
+            changed = true;
+            aggiornatiCodF++;
+          }
+          // Salva il prezzo giornalino come campo separato (non sovrascrive prezzo principale)
+          if(prezzoCartellino){
+            var mag = magazzino[dbIdx] || {};
+            mag.prezzoGiornalino = prezzoCartellino;
+            mag.prezzoGiornalinoData = new Date().toLocaleDateString('it-IT');
+            magazzino[dbIdx] = mag;
+            changed = true;
+          }
+          if(changed){
+            lsSet(SK, rows);
+            lsSet(MAGK, magazzino);
+            if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(dbIdx);
+          }
+        }
+      });
+
       CT.save(); CT.render();
-      showToastGen('green','✅ '+ctRows.length+' cartellini importati');
-    } else {
-      // Formato nuovo: confirmImp aggiorna DB e cartellini separatamente
-      setTimeout(function(){ CT.render(); }, 200);
+      var msg = '✅ ' + pendingImportDB.length + ' cartellini importati';
+      if(aggiornatiCodF > 0) msg += ' | ' + aggiornatiCodF + ' cod.forn. aggiunti';
+      if(prezziGiornalino > 0) msg += ' | ' + prezziGiornalino + ' con prezzo diverso';
+      showToastGen('green', msg);
+      cancelImp();
+      return;
     }
-    ct_toggleCsv(); // chiudi pannello CSV
+
+    // Vecchio formato: rows = cartellini puri
+    if(typeof pendingImport !== 'undefined' && pendingImport && pendingImport.length){
+      pendingImport.forEach(function(r){
+        ctRows.push(Object.assign({}, r));
+      });
+      CT.save(); CT.render();
+      showToastGen('green', '✅ ' + pendingImport.length + ' cartellini importati');
+      cancelImp();
+      return;
+    }
+
+    showToastGen('red', '⚠️ Nessun dato da importare');
   };
 })(confirmImp);
+
 
 // ── Aggiorna CT quando si apre la tab t1 ─────────────────────────────────────
 document.addEventListener('click', function(e){

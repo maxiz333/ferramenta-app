@@ -108,11 +108,11 @@ select{padding:3px 4px;border:1px solid var(--border);border-radius:3px;font-siz
 #al li input[type=checkbox]{width:20px;height:20px;cursor:pointer;flex-shrink:0;margin-top:2px;}
 .ld{flex:1;} .ln{font-size:11px;color:var(--muted);font-style:italic;display:block;margin-top:2px;}
 .lp{font-weight:bold;color:#fc8181;white-space:nowrap;} .lc{color:var(--muted);font-size:10px;white-space:nowrap;}
-#pov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:3000;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;}
-#pov.open{display:block;}
-#pb{background:#e8e8e8;max-width:230mm;margin:0 auto;border-radius:8px;overflow:hidden;}
-#ph{background:#111;color:var(--accent);padding:11px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;border-bottom:2px solid var(--accent);}
-#print-area{background:white;padding:4mm 4.5mm;width:210mm;}
+#pov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:3000;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0;}
+#pov.open{display:flex;flex-direction:column;}
+#pb{background:#e8e8e8;max-width:230mm;margin:0 auto;border-radius:0;overflow:hidden;flex:1;width:100%;display:flex;flex-direction:column;}
+#ph{background:#111;color:var(--accent);padding:11px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;border-bottom:2px solid var(--accent);position:sticky;top:0;z-index:10;flex-shrink:0;}
+#print-area{display:none;background:white;padding:4mm 4.5mm;width:210mm;}
 .tag-row{display:flex;flex-direction:row;flex-wrap:nowrap;}
 .tag-row+.tag-row{border-top:.4px dashed #bbb;}
 .tag-small+.tag-small,.tag-large+.tag-large{border-left:.4px dashed #bbb;}
@@ -139,8 +139,8 @@ select{padding:3px 4px;border:1px solid var(--border);border-radius:3px;font-siz
 @media print{
   @page{size:A4 portrait;margin:4mm;}
   body{background:white;padding:0;}
-  .tabs,.panel,.overlay,#pov{display:none!important;}
-  #print-area{padding:0;width:100%;}
+  body > *{display:none!important;}
+  #print-area{display:block!important;padding:0;width:100%;}
   .tag-row{page-break-inside:avoid;}
   .tag-row+.tag-row{border-top:.4px dashed #999;}
   .tag-small+.tag-small,.tag-large+.tag-large{border-left:.4px dashed #999;}
@@ -453,7 +453,8 @@ body.light-mode #fatture-popup button { color: #444; }
 
 /* DDT stampa — nasconde tutto tranne il DDT */
 @media print {
-  body > *:not(#ddt-print-overlay) { display:none !important; }
+  body > *:not(#ddt-print-overlay):not(#print-area) { display:none !important; }
+  #print-area { display:block !important; padding:0 !important; width:100% !important; }
   #ddt-print-overlay { position:static !important; overflow:visible !important; }
   #ddt-print-overlay > div:first-child { display:none !important; } /* nasconde toolbar */
   #ddt-content { padding:0 !important; margin:0 !important; max-width:none !important; }

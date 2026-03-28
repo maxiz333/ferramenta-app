@@ -813,7 +813,7 @@ body.light-mode #confirm-overlay > div { background:#fff; }
     <div style="padding:6mm;background:white;" id="pc"></div>
   </div>
 </div>
-<div id="print-area" style="display:none;"></div>
+<div id="print-area"></div>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.js"></script>
 
 <!-- ═══ OVERLAYS CARRELLO (numpad, ricevuta, edit-ordine) ═══ -->
@@ -1017,7 +1017,7 @@ body.light-mode #confirm-overlay > div { background:#fff; }
     <button onclick="filterOrdini('lavorazione')" id="ord-f-lavorazione" style="padding:4px 10px;border-radius:14px;border:1px solid #222;background:transparent;color:#555;font-size:10px;font-weight:600;cursor:pointer;">⏳ In corso</button>
     <button onclick="filterOrdini('pronto')" id="ord-f-pronto" style="padding:4px 10px;border-radius:14px;border:1px solid #222;background:transparent;color:#555;font-size:10px;font-weight:600;cursor:pointer;">📦 Pronto</button>
     <button onclick="toggleDaOrdinareView()" id="ord-f-daordinare" style="padding:8px 14px;border-radius:20px;border:2px solid #e53e3e;background:transparent;color:#fc8181;font-size:12px;font-weight:900;cursor:pointer;margin-left:auto;letter-spacing:.5px;">🚚 Da ordinare</button>
-    <button onclick="clearOrdiniCompletati()" style="padding:4px 10px;border-radius:14px;border:1px solid #222;background:transparent;color:#444;font-size:10px;cursor:pointer;">🗑️</button>
+    <button onclick="toggleCestinoOrdini()" id="ord-f-cestino" style="padding:4px 10px;border-radius:14px;border:1px solid #222;background:transparent;color:#444;font-size:10px;cursor:pointer;">🗑️</button>
     <button onclick="toggleStoricoOrdini()" id="ord-f-storico" style="padding:4px 10px;border-radius:14px;border:1px solid #333;background:transparent;color:#805ad5;font-size:10px;font-weight:600;cursor:pointer;">📂 Storico</button>
   </div>
   <div style="margin-bottom:12px;">
