@@ -943,7 +943,7 @@ function renderCartTabs(){
     var _nomeComm = (typeof _roles !== 'undefined' && _roles[cart.commesso])
       ? _roles[cart.commesso].nome : (cart.commesso || 'altro account');
     h += '<div style="position:relative;background:#111;border-radius:14px;border:2px solid #2a2a2a;min-height:160px;display:flex;align-items:center;justify-content:center;">';
-    h += '<div class="ord-lock-overlay" style="position:relative;border-radius:12px;padding:32px 20px;" onclick="cartForzaAccesso('' + cart.id + '')">';
+    h += '<div class="ord-lock-overlay" style="position:relative;border-radius:12px;padding:32px 20px;" onclick="cartForzaAccesso(' + "'" + cart.id + "'" + ')">';
     h += '<div class="ord-lock-msg">';
     h += '<div style="font-size:30px;margin-bottom:8px">🔐</div>';
     h += '<div style="font-size:15px;font-weight:900">CARRELLO DI ' + esc(_nomeComm).toUpperCase() + '</div>';
