@@ -152,14 +152,11 @@ function confirmNewCart(){
   if(!sconto&&savedSconto)sconto=savedSconto;
   if(nome&&sconto)setClienteSconto(nome,sconto);
   var id='cart_'+Date.now();
-  var _commId = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.key : '';
-  console.log('[CART] Nuovo carrello — commesso:', _commId || '(nessun login)');
   carrelli.push({id:id,nome:nome||('Cliente '+(carrelli.length+1)),
     createdAt:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),
     dataCreazione:Date.now(),
     creatoAtISO:new Date().toISOString(),
     items:[],
-    commesso: _commId,
     scontoGlobale:sconto||null});
   activeCartId=id;
   saveCarrelli();
@@ -186,12 +183,48 @@ function switchCart(idx){
 function deleteCart(id){
   var cart=carrelli.find(function(c){return c.id===id;});
   if(!cart)return;
+  // Blocco: non si può eliminare un carrello altrui (solo proprietario può)
+  if(!_cartPossoModificare(cart)){
+    console.warn('[CART] deleteCart BLOCCATO — carrello di:', cart.commesso);
+    showToastGen('orange','🔒 Non puoi eliminare il carrello di un altro account');
+    return;
+  }
   cart.deletedAt=new Date().toLocaleString('it-IT');
   carrelliCestino.push(cart);lsSet(CART_CK,carrelliCestino);
   carrelli=carrelli.filter(function(c){return c.id!==id;});
   if(activeCartId===id)activeCartId=carrelli.length?carrelli[carrelli.length-1].id:null;
   saveCarrelli();renderCartTabs();
-  showToastGen('green','-- Carrello eliminato');
+  showToastGen('green','🗑️ Carrello eliminato');
+}
+
+// ── LOCK PER-CARRELLO — stesso sistema degli ordini ──────────────────────────
+// Ritorna true se l'utente corrente può modificare questo carrello
+function _cartPossoModificare(cart){
+  if(!cart) return false;
+  var myKey = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.key : null;
+  var myRuolo = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.ruolo : 'proprietario';
+  // Proprietario può sempre modificare tutto
+  if(myRuolo === 'proprietario') return true;
+  // Carrello senza proprietario (legacy): tutti possono modificarlo
+  if(!cart.commesso) return true;
+  // Altrimenti solo il proprietario del carrello
+  return cart.commesso === myKey;
+}
+
+// Sblocca il carrello inviato per rimetterlo in modifica (era cartUnlock, mancava)
+function cartUnlock(cartId){
+  var cart = carrelli.find(function(c){ return c.id === cartId; });
+  if(!cart) return;
+  if(!_cartPossoModificare(cart)){
+    showToastGen('orange','🔒 Solo il proprietario del carrello può sbloccarlo');
+    return;
+  }
+  console.log('[CART] cartUnlock — carrello:', cartId);
+  cart.stato = 'modifica';
+  cart.locked = false;
+  saveCarrelli();
+  renderCartTabs();
+  showToastGen('purple','✏️ Carrello sbloccato — modifica e aggiorna');
 }
 
 // ── ELIMINA CARRELLO IN MODIFICA ────────────────────────────────────────────
@@ -216,6 +249,11 @@ function eliminaCarrelloModifica(cartId){
 function svuotaCarrello(cartId){
   var cart = carrelli.find(function(c){ return c.id === cartId; });
   if(!cart || !(cart.items||[]).length){ showToastGen('yellow','Carrello già vuoto'); return; }
+  if(!_cartPossoModificare(cart)){
+    console.warn('[CART] svuotaCarrello BLOCCATO — carrello di:', cart.commesso);
+    showToastGen('orange','🔒 Non puoi svuotare il carrello di un altro account');
+    return;
+  }
   showConfirm('Svuotare il carrello "' + (cart.nome||'') + '"?\nTutti gli articoli saranno rimossi.', function(){
     _takeSnapshot(); // salva snapshot per undo
     cart.items = [];
@@ -872,6 +910,22 @@ function renderCartTabs(){
   if(!cart) return;
 
   var h = '';
+
+  // ── BLOCCO CARRELLO ALTRUI — overlay identico agli ordini ──────────────────
+  var _cartMio = _cartPossoModificare(cart);
+  if(!_cartMio){
+    var _cartCommNome = (typeof _roles !== 'undefined' && _roles[cart.commesso]) ? _roles[cart.commesso].nome : (cart.commesso || 'altro account');
+    h += '<div style="background:#161616;border-radius:16px;overflow:hidden;border:2px solid #2a2a2a;position:relative;margin-bottom:12px;">';
+    h += '<div class="ord-lock-overlay" style="position:relative;inset:auto;border-radius:12px;padding:40px 20px;" onclick="cartForzaAccesso('' + cart.id + '')">';
+    h += '<div class="ord-lock-msg">';
+    h += '<div style="font-size:32px;margin-bottom:10px">🔐</div>';
+    h += '<div style="font-size:16px;font-weight:900">CARRELLO DI ' + esc(_cartCommNome).toUpperCase() + '</div>';
+    h += '<div style="font-size:11px;margin-top:8px;color:#aaa">Solo il proprietario può modificarlo</div>';
+    h += '<div style="font-size:10px;margin-top:12px;color:#666">Triplo tap per forzare</div>';
+    h += '</div></div></div>';
+    body.innerHTML = h;
+    return;
+  }
 
   // ── STATO INVIATO (read-only) ─────────────────────────────────────────────
   if(cart.stato === 'inviato' && cart.locked){
@@ -1910,6 +1964,50 @@ function confermaOrdineAFornitori(){
   chiudiSubTabOrdinare();
 }
 
+// ── FORZA ACCESSO CARRELLO — triplo tap (stesso pattern ordForceLock) ──────
+var _cartForzaTapTimer = null;
+var _cartForzaTapId = null;
+var _cartForzaTapCount = 0;
+
+function cartForzaAccesso(cartId){
+  // Implementa triplo-tap con timer 600ms
+  if(_cartForzaTapId === cartId){
+    _cartForzaTapCount++;
+    clearTimeout(_cartForzaTapTimer);
+    if(_cartForzaTapCount >= 2){
+      // Triplo tap raggiunto — chiedi conferma
+      _cartForzaTapId = null; _cartForzaTapCount = 0;
+      var cart = carrelli.find(function(c){ return c.id === cartId; });
+      if(!cart) return;
+      var nomeComm = (typeof _roles !== 'undefined' && _roles[cart.commesso]) ? _roles[cart.commesso].nome : (cart.commesso || 'altro account');
+      if(!confirm('⚠️ Forza accesso
+
+Questo è il carrello di ' + nomeComm + '.
+
+Vuoi forzare l'accesso?')) return;
+      console.warn('[CART] cartForzaAccesso CONFERMATO su:', cartId, 'era di:', nomeComm);
+      // Prende ownership del carrello
+      var chi = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.nome : 'Sconosciuto';
+      cart.commesso = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.key : cart.commesso;
+      cart._forzatoLog = (cart._forzatoLog || []);
+      cart._forzatoLog.unshift('⚠️ ' + new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) + ' — Accesso forzato da ' + chi);
+      saveCarrelli();
+      renderCartTabs();
+      showToastGen('orange','🔓 Accesso forzato — ora sei il proprietario del carrello');
+      return;
+    }
+    // Secondo tap — feedback visivo
+    showToastGen('orange','Ancora un tap per forzare...');
+  } else {
+    _cartForzaTapId = cartId;
+    _cartForzaTapCount = 0;
+    showToastGen('orange','Triplo tap per forzare l'accesso');
+  }
+  _cartForzaTapTimer = setTimeout(function(){
+    _cartForzaTapId = null; _cartForzaTapCount = 0;
+  }, 600);
+}
+
 // ── AVVISA UFFICIO — crea bozza ordine visibile in tab ordini ──────
 function avvisaUfficio(cartId){
   var cart=carrelli.find(function(c){return c.id===cartId;});
@@ -1935,14 +2033,12 @@ function avvisaUfficio(cartId){
     nota:cart.nota||'',
     totale:'0',
     stato:'bozza',
-    commesso: (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.key : (cart.commesso||'')
+    commesso:cart.commesso||''
   };
   ordini.unshift(bozza);
-  saveOrdini();
-  // Lock DOPO saveOrdini: la bozza deve già esistere su Firebase prima di scrivere il lock
-  // altrimenti l'altro device riceve il lock ma non trova ancora la bozza nell'array
-  console.log('[LOCK] avvisaUfficio — acquisisco lock su bozza:', bozzaId);
+  // Acquisisce il lock sulla bozza: il Banco è il proprietario finché non invia l'ordine vero
   ordLock(bozzaId);
+  saveOrdini();
   cart.bozzaOrdId=bozzaId;
   saveCarrelli();
   renderCartTabs();
