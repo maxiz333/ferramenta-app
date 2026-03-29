@@ -191,6 +191,22 @@ function deleteCart(id){
   showToastGen('green','-- Carrello eliminato');
 }
 
+// ── ELIMINA CARRELLO IN MODIFICA ────────────────────────────────────────────
+// Scollega l'ordine (se esiste ancora) e rimuove il carrello
+function eliminaCarrelloModifica(cartId){
+  var cart = carrelli.find(function(c){ return c.id === cartId; });
+  if(!cart) return;
+  showConfirm('Eliminare questo carrello?\nSe l\'ordine esiste ancora rimarrà invariato.', function(){
+    // Scollega bozza se presente
+    if(cart.bozzaOrdId){
+      ordini = ordini.filter(function(o){ return o.id !== cart.bozzaOrdId; });
+      saveOrdini();
+    }
+    // Rimuovi il carrello
+    deleteCart(cartId);
+  });
+}
+
 // ── SVUOTA CARRELLO ──────────────────────────────────────────────────────────
 // Rimuove tutti gli articoli dal carrello attivo dopo conferma utente.
 // Usa showConfirm (funzione custom, non window.confirm bloccante su WebView).
@@ -420,24 +436,43 @@ function cartSetUnit(cartId,idx,val){
 // Helper: calcola prezzo effettivo (con sconto scampolo/rotolo se attivo)
 function _prezzoEffettivo(it){
   var p=parsePriceIT(it.prezzoUnit);
-  var scOn=it.scampolo||it.fineRotolo;
   var sc=it._scontoApplicato||0;
-  if(scOn&&sc>0) return p*(1-sc/100);
+  // Scampolo/Rotolo: sconto diretto
+  if((it.scampolo||it.fineRotolo) && sc>0) return p*(1-sc/100);
+  // Scaglionato: sconto solo se qty >= soglia
+  if(it._scaglionato && sc>0){
+    var q=parseFloat(it.qty||0);
+    var soglia=it._scaglioneQta||10;
+    if(q>=soglia) return p*(1-sc/100);
+  }
   return p;
 }
 function cartCycleScampolo(cartId,idx){
   var cart=carrelli.find(function(c){return c.id===cartId;});
   if(!cart||!cart.items[idx])return;
   var it=cart.items[idx];
-  if(!it.scampolo){
-    // niente → scampolo ON
-    it.scampolo=true;it.fineRotolo=false;
+  if(!it.scampolo && !it.fineRotolo && !it._tuttoRotolo && !it._scaglionato){
+    // OFF -> Scampolo
+    it.scampolo=true; it.fineRotolo=false; it._tuttoRotolo=false; it._scaglionato=false;
     it._scontoTipo='scampolo';
     if(!it._scontoApplicato) it._scontoApplicato=30;
+  } else if(it.scampolo){
+    // Scampolo -> Rotolo
+    it.scampolo=false; it.fineRotolo=true; it._tuttoRotolo=true; it._scaglionato=false;
+    it._scontoTipo='rotolo';
+    it._scontoApplicato=0;
+    it.nota='ROTOLO INTERO';
+  } else if(it.fineRotolo || it._tuttoRotolo){
+    // Rotolo -> Scaglionato
+    it.scampolo=false; it.fineRotolo=false; it._tuttoRotolo=false; it._scaglionato=true;
+    it._scontoTipo='scaglionato';
+    if(it.nota==='ROTOLO INTERO') it.nota='';
+    if(!it._scontoApplicato) it._scontoApplicato=5;
+    if(!it._scaglioneQta) it._scaglioneQta=10;
   } else {
-    // scampolo → OFF
-    it.scampolo=false;it.fineRotolo=false;
-    delete it._scontoTipo;delete it._scontoApplicato;
+    // Scaglionato -> OFF
+    it.scampolo=false; it.fineRotolo=false; it._tuttoRotolo=false; it._scaglionato=false;
+    delete it._scontoTipo; delete it._scontoApplicato; delete it._scaglioneQta;
   }
   saveCarrelli();renderCartTabs();
 }
@@ -795,7 +830,11 @@ function renderCartTabs(){
   if(oldRow2) oldRow2.remove();
 
   // Riga unica: NUOVO + CLIENTI + ORDINI (in ordine di importanza)
-  var nCl = carrelli.length;
+  var _oggiC = new Date().toISOString().slice(0,10);
+  var nCl = carrelli.filter(function(c){
+    var d = c.creatoAtISO ? c.creatoAtISO.slice(0,10) : '';
+    return d === _oggiC || c.stato === 'inviato' || c.stato === 'modifica';
+  }).length;
   row1.innerHTML =
     '<button class="ct-pill--new" onclick="newCart()">＋ NUOVO</button>' +
     '<button id="ct-btn-clienti" onclick="ctApriClienti()" title="Scegli cliente">' +
@@ -840,7 +879,7 @@ function renderCartTabs(){
     h += '<div class="ct-inviato-top">';
     h += '<span style="font-size:22px">✅</span>';
     h += '<div style="flex:1"><div class="ct-inviato-label">Ordine inviato alla cassa</div>';
-    h += '<div class="ct-inviato-nome">' + esc(cart.nome) + '</div></div>';
+    h += '<div class="ct-inviato-nome" onclick="ctEditClienteName(\''+cart.id+'\')" style="cursor:pointer;" title="Tap per modificare">' + esc(cart.nome) + '</div></div>';
     h += '<div class="ct-price-big">€ ' + totInv.toFixed(2) + '</div>';
     h += '</div>';
     (cart.items||[]).forEach(function(it){
@@ -866,7 +905,7 @@ function renderCartTabs(){
   if(cart.stato === 'modifica'){
     h += '<div class="ct-banner-mod">';
     h += '<span style="font-size:13px">✏️</span>';
-    h += '<span class="ct-banner-mod-title">' + esc(cart.nome) + ' — MODIFICA</span>';
+    h += '<span class="ct-banner-mod-title" onclick="ctEditClienteName(\''+cart.id+'\')" style="cursor:pointer;" title="Tap per modificare">' + esc(cart.nome) + ' — MODIFICA</span>';
     h += '</div>';
   }
 
@@ -925,7 +964,14 @@ function renderCartTabs(){
 
       // Prezzo scontato calcolato al volo
       var scAttivo     = it._scontoApplicato || 0;
-      var pScontato    = (scOn && scAttivo > 0) ? p * (1 - scAttivo/100) : p;
+      var scApplica = false;
+      if(it._scaglionato && scAttivo > 0){
+        // Scaglionato: sconto solo se qty >= soglia
+        scApplica = q >= (it._scaglioneQta || 10);
+      } else if(scOn && scAttivo > 0){
+        scApplica = true;
+      }
+      var pScontato    = scApplica ? p * (1 - scAttivo/100) : p;
       var sub          = (pScontato * q).toFixed(2);
 
       // Cod. Magazzino — 7 cifre se numerico
@@ -982,10 +1028,12 @@ function renderCartTabs(){
 
       // Colonna prezzo — prezzo base sempre visibile, scontato sotto se attivo
       h += '<div class="ord-gc-price" id="prz-' + idx + '">';
-      var hasSconto = scOn && scAttivo > 0 && pScontato < p - 0.005;
+      var hasSconto = scApplica && pScontato < p - 0.005;
       if(hasSconto){
+        var savU = (p - pScontato).toFixed(2);
         h += '<div class="ct-old--orig">€' + p.toFixed(2) + '</div>';
         h += '<div class="ct-sub--final">€' + pScontato.toFixed(2) + '</div>';
+        h += '<div style="font-size:8px;color:#f6ad55;text-align:center;">-€' + savU + '</div>';
       } else {
         h += '<div style="font-size:12px;font-weight:900;color:#999">€' + p.toFixed(2) + '</div>';
       }
@@ -998,8 +1046,10 @@ function renderCartTabs(){
       // Colonna totale
       h += '<div class="ord-gc-sub">';
       if(hasSconto){
+        var savT = ((p - pScontato) * q).toFixed(2);
         h += '<div class="ct-old--orig">€' + (p * q).toFixed(2) + '</div>';
         h += '<div class="ct-sub--final">€' + sub + '</div>';
+        h += '<div style="font-size:8px;color:#f6ad55;text-align:center;">-€' + savT + '</div>';
       } else {
         var subColor = isTuttoRotolo ? '#fc8181' : (isFR ? '#f6ad55' : 'var(--accent)');
         h += '<div style="font-size:13px;font-weight:900;color:' + subColor + '">€' + sub + '</div>';
@@ -1012,13 +1062,16 @@ function renderCartTabs(){
       h += '<div class="ct-iconbar">';
 
       // FORBICI (tap=scampolo, doppio tap=rotolo) + input % inline
-      var forbLbl = isTuttoRotolo ? 'ROTOLO' : (scOn ? (isFR ? 'ROTOLO' : 'SCAMPOLO') : '');
+      var isScag = it._scaglionato || false;
+      var forbLbl = isScag ? 'SCAGLIONATO' : (isTuttoRotolo ? 'ROTOLO' : (scOn ? (isFR ? 'ROTOLO' : 'SCAMPOLO') : ''));
+      var forbActive = scOn || isTuttoRotolo || isScag;
       h += '<div class="ct-forbici-row">';
       h += '<button class="ct-icon-btn' +
-           (scOn||isTuttoRotolo ? ' ct-icon-btn--on' : '') +
-           (isTuttoRotolo ? ' ct-icon-btn--rotolo' : '') + '" ' +
+           (forbActive ? ' ct-icon-btn--on' : '') +
+           (isTuttoRotolo ? ' ct-icon-btn--rotolo' : '') +
+           (isScag ? ' ct-icon-btn--scag' : '') + '" ' +
            'onclick="ctForbiciTap(\'' + cart.id + '\',' + idx + ')" ' +
-           'title="Tap: scampolo | 2 tap rapidi: TUTTO IL ROTOLO">';
+           'title="Tap: cicla Scampolo/Rotolo/Scaglionato">';
       h += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
            '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>' +
            '<line x1="20" y1="4" x2="8.12" y2="15.88"/>' +
@@ -1028,13 +1081,21 @@ function renderCartTabs(){
       // Input % sempre visibile accanto
       var scAtt = it._scontoApplicato || 0;
       h += '<div class="ct-sc-inline">';
-      h += '<input type="number" min="0" max="100" value="' + (scAtt || '') + '" placeholder="%" class="ct-sc-inp" ' +
-           'onchange="cartSetScontoScampolo(\'' + cart.id + '\',' + idx + ',this.value)" ' +
+      h += '<input type="number" min="0" max="100" value="' + (scAtt || '') + '" placeholder="%" class="ct-sc-inp"' +
+           (isScag ? ' style="color:#63b3ed;border-color:#63b3ed44;"' : '') +
+           ' onchange="cartSetScontoScampolo(\'' + cart.id + '\',' + idx + ',this.value)" ' +
            'onclick="event.stopPropagation();this.select()">';
-      h += '<span class="ct-sc-pct">%</span>';
+      h += '<span class="ct-sc-pct"' + (isScag ? ' style="color:#63b3ed"' : '') + '>%</span>';
+      if(isScag){
+        h += '<span style="font-size:9px;color:#63b3ed;">da</span>';
+        h += '<input type="number" min="1" value="' + (it._scaglioneQta || 10) + '" class="ct-sc-inp" style="width:36px;color:#63b3ed;border-color:#63b3ed44;" ' +
+             'onchange="cartSetScaglioneQta(\'' + cart.id + '\',' + idx + ',this.value)" ' +
+             'onclick="event.stopPropagation();this.select()">';
+        h += '<span style="font-size:9px;color:#63b3ed;">pz</span>';
+      }
       if(scAtt > 0){
         var risparmio = (parsePriceIT(it._prezzoOriginale||it._prezzoBase||it.prezzoUnit) * q * scAtt / 100).toFixed(2);
-        h += '<span class="ct-sc-risp">-€' + risparmio + '</span>';
+        h += '<span class="ct-sc-risp"' + (isScag ? ' style="color:#63b3ed"' : '') + '>-€' + risparmio + '</span>';
       }
       h += '</div>';
       h += '</div>';
@@ -1116,8 +1177,17 @@ function renderCartTabs(){
   h += '<div class="ct-footer-tot"><span class="ct-footer-sym">€</span>' + tot2Fin.toFixed(2) + '</div>';
   h += '<div class="ct-footer-btns">';
   h += '<button class="ct-fbtn ct-fbtn--danger" onclick="svuotaCarrello(\'' + cart.id + '\')">🗑️<span>SVUOTA</span></button>';
+  // Tasto Avvisa Ufficio — solo se non è modifica e non è già inviato
+  if(cart.stato !== 'modifica' && cart.stato !== 'inviato'){
+    var haBozza = !!cart.bozzaOrdId;
+    h += '<button class="ct-fbtn ct-fbtn--avvisa' + (haBozza ? ' ct-fbtn--avvisa-on' : '') + '" ' +
+         (!(cart.items||[]).length ? 'disabled ' : '') +
+         'onclick="avvisaUfficio(\'' + cart.id + '\')">' +
+         (haBozza ? '📡' : '📢') + '<span>' + (haBozza ? 'AGGIORNA' : 'UFFICIO') + '</span></button>';
+  }
   h += '<button class="ct-fbtn ct-fbtn--riepilogo" onclick="openRiepilogoOrdine(\'' + cart.id + '\')">👀<span>RIEPILOGO</span></button>';
   if(cart.stato === 'modifica'){
+    h += '<button class="ct-fbtn ct-fbtn--danger" onclick="eliminaCarrelloModifica(\'' + cart.id + '\')" title="Elimina carrello">🗑️<span>ELIMINA</span></button>';
     h += '<button class="ct-fbtn ct-fbtn--cassa" id="ctf-cassa-' + cart.id + '" ' +
          'onclick="ctCassaSingleClick(this,\'aggiornaOrdine(\\x27' + cart.id + '\\x27)\')">' +
          '✏️<span>AGGIORNA</span></button>';
@@ -1181,7 +1251,7 @@ function ctRenderClientiList(){
     var stato    = cart.stato === 'inviato' ? '✅ ' : cart.stato === 'modifica' ? '✏️ ' : '';
     h += '<button class="ct-clienti-btn' + (isActive ? ' active' : '') + '" ' +
          'onclick="ctSelezionaCliente(' + ci + ')">' +
-         '<span>' + stato + esc(cart.nome || '—') + '</span>' +
+         '<span onclick="ctEditClienteName(\''+cart.id+'\')" style="cursor:pointer">' + stato + esc(cart.nome || '—') + '</span>' +
          (n ? '<span class="ct-clienti-n">' + n + ' art.</span>' : '') +
          '</button>';
   });
@@ -1253,19 +1323,8 @@ var _ctForbiciTimers  = {};
 var _ctForbiciPending = {};
 
 function ctForbiciTap(cartId, idx){
-  if(_ctForbiciPending[idx]){
-    // ── SECONDO TAP rilevato (doppio tap) ──────────────────────────────
-    clearTimeout(_ctForbiciTimers[idx]);
-    _ctForbiciPending[idx] = false;
-    ctTuttoRotolo(cartId, idx);   // attiva/disattiva ROTOLO INTERO
-  } else {
-    // ── PRIMO TAP: aspetta per vedere se arriva il secondo ─────────────
-    _ctForbiciPending[idx] = true;
-    _ctForbiciTimers[idx]  = setTimeout(function(){
-      _ctForbiciPending[idx] = false;
-      cartCycleScampolo(cartId, idx);   // tap singolo: ciclo scampolo
-    }, 380);
-  }
+  // Singolo tap: cicla OFF → Scampolo → Rotolo → Scaglionato → OFF
+  cartCycleScampolo(cartId, idx);
 }
 
 // ctTuttoRotolo: attiva o disattiva la modalità ROTOLO INTERO
@@ -1848,9 +1907,64 @@ function confermaOrdineAFornitori(){
   chiudiSubTabOrdinare();
 }
 
+// ── AVVISA UFFICIO — crea bozza ordine visibile in tab ordini ──────
+function avvisaUfficio(cartId){
+  var cart=carrelli.find(function(c){return c.id===cartId;});
+  if(!cart||(!(cart.items||[]).length)){showToastGen('red','Aggiungi almeno un articolo prima');return;}
+
+  if(cart.bozzaOrdId){
+    // Bozza già attiva: aggiorna
+    _aggiornaBozzaOrdine(cart);
+    showToastGen('green','📢 Ufficio aggiornato!');
+    return;
+  }
+
+  var bozzaId='bozza_'+Date.now();
+  var bozza={
+    id:bozzaId,
+    numero:null,
+    nomeCliente:cart.nome||'—',
+    ora:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),
+    data:new Date().toLocaleDateString('it-IT'),
+    dataISO:new Date().toISOString().slice(0,10),
+    createdAt:new Date().toISOString(),
+    items:JSON.parse(JSON.stringify(cart.items||[])),
+    nota:cart.nota||'',
+    totale:'0',
+    stato:'bozza',
+    commesso:cart.commesso||''
+  };
+  ordini.unshift(bozza);
+  saveOrdini();
+  cart.bozzaOrdId=bozzaId;
+  saveCarrelli();
+  renderCartTabs();
+  showToastGen('green','📢 Ufficio avvisato! Vedono già gli articoli.');
+}
+
+// Aggiorna la bozza con gli articoli correnti del carrello
+function _aggiornaBozzaOrdine(cart){
+  if(!cart||!cart.bozzaOrdId)return;
+  var bozza=ordini.find(function(o){return o.id===cart.bozzaOrdId;});
+  if(!bozza||bozza.stato!=='bozza')return;
+  bozza.items=JSON.parse(JSON.stringify(cart.items||[]));
+  bozza.nomeCliente=cart.nome||'—';
+  bozza.nota=cart.nota||'';
+  saveOrdini();
+}
+
+// Elimina la bozza collegata (chiamata quando si invia l'ordine vero)
+function _rimuoviBozzaOrdine(cart){
+  if(!cart||!cart.bozzaOrdId)return;
+  ordini=ordini.filter(function(o){return o.id!==cart.bozzaOrdId;});
+  delete cart.bozzaOrdId;
+}
+
 function inviaOrdine(cartId){
   var cart=carrelli.find(function(c){return c.id===cartId;});
   if(!cart||!(cart.items||[]).length){showToastGen('red','-- Carrello vuoto!');return;}
+  // Rimuovi bozza se presente
+  _rimuoviBozzaOrdine(cart);
   var tot=(cart.items||[]).reduce(function(s,it){return s+(_prezzoEffettivo(it)*parseFloat(it.qty||0));},0);
   var numOrd=getNextOrdNum();
   var ord={
@@ -1867,8 +1981,16 @@ function inviaOrdine(cartId){
         var scOn=it.scampolo||it.fineRotolo;
         var sc=it._scontoApplicato||0;
         if(scOn&&sc>0){
-          it._prezzoOriginale=it.prezzoUnit;
-          it.prezzoUnit=(parsePriceIT(it.prezzoUnit)*(1-sc/100)).toFixed(2);
+          if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
+          it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-sc/100)).toFixed(2);
+        }
+        // Scaglionato: applica sconto se qty >= soglia
+        if(it._scaglionato&&sc>0){
+          var q=parseFloat(it.qty||0);
+          if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
+          if(q>=(it._scaglioneQta||10)){
+            it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-sc/100)).toFixed(2);
+          }
         }
       });
       return cpy;
@@ -1923,3 +2045,43 @@ function inviaOrdine(cartId){
   showToastGen('green','- Ordine #'+numOrd+' inviato! - '+ord.nomeCliente+' - - '+ord.totale);
 }
 
+
+// ── Modifica nome cliente dal carrello ───────────────────────────
+function ctEditClienteName(cartId){
+  var cart = carrelli.find(function(c){ return c.id === cartId; });
+  if(!cart) return;
+  var nome = prompt('Nome cliente:', cart.nome || '');
+  if(nome === null) return;
+  cart.nome = nome.trim();
+  saveCarrelli();
+  // Aggiorna anche l'ordine collegato
+  if(cart.ordId){
+    var ord = ordini.find(function(o){ return o.id === cart.ordId; });
+    if(ord){ ord.nomeCliente = nome.trim(); saveOrdini(); }
+  }
+  renderCartTabs();
+  showToastGen('green', '✏️ Cliente aggiornato');
+}
+
+// ── Imposta quantità minima scaglione (carrello) ─────────────────
+function cartSetScaglioneQta(cartId, idx, val){
+  var cart = carrelli.find(function(c){ return c.id === cartId; });
+  if(!cart || !cart.items[idx]) return;
+  cart.items[idx]._scaglioneQta = parseInt(val) || 10;
+  saveCarrelli(); renderCartTabs();
+}
+
+// ── Override saveCarrelli: aggiorna automaticamente le bozze attive ──
+// (core.js definisce saveCarrelli; qui la estendiamo senza toccare database.js)
+(function(){
+  var _origSaveCarrelli = saveCarrelli;
+  saveCarrelli = function(){
+    _origSaveCarrelli();
+    // Per ogni carrello con bozza attiva, aggiorna la bozza ordine
+    (carrelli||[]).forEach(function(cart){
+      if(cart.bozzaOrdId && (cart.items||[]).length){
+        _aggiornaBozzaOrdine(cart);
+      }
+    });
+  };
+})();

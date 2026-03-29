@@ -13,10 +13,51 @@ function aggiornaOrdine(cartId){
   var cart=carrelli.find(function(c){return c.id===cartId;});
   if(!cart||!cart.ordId)return;
   var ord=ordini.find(function(o){return o.id===cart.ordId;});
-  if(!ord){showToastGen('red','Ordine non trovato');return;}
+  if(!ord){
+    // Ordine eliminato: scollega il carrello
+    cart.stato='';
+    cart.locked=false;
+    delete cart.ordId;
+    saveCarrelli(); renderCartTabs();
+    showToastGen('orange','Ordine eliminato — carrello scollegato');
+    return;
+  }
+  // ── Confronta vecchio vs nuovo per nota automatica ──
+  var vecchiItems = ord.items || [];
+  var nuoviItems  = cart.items || [];
+  var ora = new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  var diff = [];
+
+  // Articoli modificati o rimossi
+  vecchiItems.forEach(function(old_it){
+    var new_it = nuoviItems.find(function(x){ return x.desc === old_it.desc; });
+    if(!new_it){
+      diff.push('rimosso: ' + (old_it.desc||'?'));
+    } else {
+      var qOld = parseFloat(old_it.qty||0), qNew = parseFloat(new_it.qty||0);
+      if(qOld !== qNew) diff.push((new_it.desc||'?') + ': ' + qOld + '→' + qNew + ' ' + (new_it.unit||'pz'));
+    }
+  });
+  // Articoli aggiunti
+  nuoviItems.forEach(function(new_it){
+    var esiste = vecchiItems.find(function(x){ return x.desc === new_it.desc; });
+    if(!esiste) diff.push('aggiunto: ' + (new_it.desc||'?') + ' ×' + (new_it.qty||1));
+  });
+
   // Aggiorna ordine con i dati modificati del carrello
   ord.items=JSON.parse(JSON.stringify(cart.items));
-  ord.nota=cart.nota||'';
+  var notaBase = cart.nota || '';
+  if(diff.length){
+    var rigaDiff = '✏️ ' + ora + ' — ' + diff.join(' · ');
+    // Salva diff separatamente per il popup modificato
+    if(!ord.modificheDiff) ord.modificheDiff = [];
+    ord.modificheDiff.unshift(rigaDiff);
+    if(ord.modificheDiff.length > 5) ord.modificheDiff.length = 5; // max 5 storici
+    // NON toccare ord.nota con la diff — la nota resta quella del cliente
+    ord.nota = notaBase;
+  } else {
+    ord.nota = notaBase;
+  }
   var tot=(cart.items||[]).reduce(function(s,it){return s+(_prezzoEffettivo(it)*parseFloat(it.qty||0));},0);
   ord.totale=tot.toFixed(2);
   ord.scontoGlobale=cart.scontoGlobale||null;
@@ -36,16 +77,24 @@ function aggiornaOrdine(cartId){
 function annullaModifica(cartId){
   var cart=carrelli.find(function(c){return c.id===cartId;});
   if(!cart)return;
-  // Ripristina items dall'ordine originale
   if(cart.ordId){
     var ord=ordini.find(function(o){return o.id===cart.ordId;});
     if(ord){
       cart.items=JSON.parse(JSON.stringify(ord.items));
       cart.nota=ord.nota||'';
+      cart.stato='inviato';
+      cart.locked=true;
+    } else {
+      // Ordine eliminato: scollega
+      cart.stato='';
+      cart.locked=false;
+      delete cart.ordId;
+      showToastGen('orange','Ordine eliminato — carrello scollegato');
     }
+  } else {
+    cart.stato='inviato';
+    cart.locked=true;
   }
-  cart.stato='inviato';
-  cart.locked=true;
   saveCarrelli();
   renderCartTabs();
   showToastGen('green','- Modifiche annullate');
@@ -177,6 +226,14 @@ function ordInlineEdit(el, gi, ii, field){
       var nq = parseFloat(v);
       if(!nq || nq <= 0) nq = parseFloat(it.qty)||1;
       it.qty = nq;
+      // Ricalcola prezzo scaglionato
+      if(it._scaglionato && it._prezzoOriginale && it._scontoApplicato > 0){
+        if(nq >= (it._scaglioneQta||10)){
+          it.prezzoUnit = (parsePriceIT(it._prezzoOriginale)*(1-it._scontoApplicato/100)).toFixed(2);
+        } else {
+          it.prezzoUnit = it._prezzoOriginale;
+        }
+      }
     } else if(field === 'price'){
       if(v) it.prezzoUnit = v;
     } else if(field === 'codF'){
@@ -199,7 +256,40 @@ function ordInlineEdit(el, gi, ii, field){
   });
 }
 
-// --- ORDINI ---------------------------------------------------
+// ── Inline edit prezzo su card bozza ─────────────────────────────
+function ordBozzaSetPrezzo(bozzaId, ii, el){
+  if(el._editing) return;
+  if(el.querySelector && el.querySelector('input.ord-inline-input')) return;
+  var ord = ordini.find(function(o){ return o.id === bozzaId; });
+  if(!ord || !ord.items[ii]) return;
+  el._editing = true;
+  var it = ord.items[ii];
+  var oldVal = it.prezzoUnit || '';
+  el.innerHTML = '<input type="text" value="'+oldVal+'" placeholder="0.00" class="ord-inline-input">';
+  var inp = el.querySelector('input');
+  setTimeout(function(){ inp.focus(); inp.select(); }, 50);
+  function save(){
+    el._editing = false;
+    var v = inp.value.trim();
+    if(v) it.prezzoUnit = v;
+    var tot = ord.items.reduce(function(s,x){ return s + parsePriceIT(x.prezzoUnit)*parseFloat(x.qty||0); },0);
+    ord.totale = tot.toFixed(2);
+    saveOrdini();
+    // Sync prezzo nel carrello collegato
+    var cartCollegato = carrelli.find(function(c){ return c.bozzaOrdId === bozzaId; });
+    if(cartCollegato && cartCollegato.items && cartCollegato.items[ii]){
+      cartCollegato.items[ii].prezzoUnit = it.prezzoUnit;
+      saveCarrelli();
+    }
+    renderOrdini();
+  }
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); inp.blur(); }
+    if(e.key === 'Escape'){ inp.value = oldVal; inp.blur(); }
+  });
+}
+
 function filterOrdini(f){
   // Chiudi vista "da ordinare"
   if(_daOrdView){
@@ -226,7 +316,7 @@ function filterOrdini(f){
     var ll2=document.getElementById('ord-list');if(ll2)ll2.style.display='';
   }
   ordFiltro=f;
-  ['nuovo','lavorazione','pronto','completato','tutti'].forEach(function(x){
+  ['bozza','nuovo','lavorazione','pronto','completato','tutti'].forEach(function(x){
     var btn=document.getElementById('ord-f-'+x);if(!btn)return;
     var on=(x===f);
     btn.style.background=on?'var(--accent)':'transparent';
@@ -258,6 +348,9 @@ function deleteOrdine(gi){
       ord.eliminatoAt = new Date().toLocaleString('it-IT');
       ordiniCestino.unshift(ord);
       lsSet(ORDK_CESTINO, ordiniCestino);
+      // Rimuovi anche il carrello collegato
+      if(ord.id) _rimuoviCarrelloDaOrdine(ord.id);
+      saveCarrelli();
     }
     saveOrdini();renderOrdini();showToastGen('red','Ordine spostato nel cestino');
   });
@@ -548,20 +641,43 @@ function renderDaOrdinareView(){
 function renderOrdini(){
   var list=document.getElementById('ord-list');if(!list)return;
   updateOrdCounter();
+  _updateBozzaBadge();
   var searchVal=(document.getElementById('ord-search')||{}).value||'';
   var searchLow=searchVal.trim().toLowerCase();
 
-  var filtered=ordini.filter(function(o){
-    if(ordFiltro!=='tutti'&&o.stato!==ordFiltro)return false;
-    if(!searchLow)return true;
-    var hay=(o.nomeCliente||'');
-    (o.items||[]).forEach(function(it){hay+=' '+(it.desc||'')+' '+(it.codF||'')+' '+(it.codM||'');});
-    return hay.toLowerCase().indexOf(searchLow)>=0;
+  // ── BOZZE — rileggi sempre da localStorage per sicurezza ──
+  var _freshOrdini = lsGet(ORDK, []);
+  // Merge: aggiungi bozze presenti in localStorage ma non in memoria
+  _freshOrdini.forEach(function(fo){
+    if(fo && fo.stato==='bozza' && !ordini.find(function(o){return o.id===fo.id;})){
+      ordini.unshift(fo);
+    }
   });
+
+  var bozze = ordini.filter(function(o){ return o.stato==='bozza'; });
+
+  // Se filtro attivo = bozza, mostra solo la sezione bozze (filtered sempre definita)
+  var filtered = [];
+  if(ordFiltro==='bozza'){
+    if(!bozze.length){
+      list.innerHTML='<div style="text-align:center;padding:60px 20px;color:#444;"><div style="font-size:40px;margin-bottom:8px;">📡</div>Nessun ordine in costruzione</div>';
+      return;
+    }
+    // filtered resta [] — mostra solo bozze
+  } else {
+    filtered = ordini.filter(function(o){
+      if(o.stato==='bozza') return false;
+      if(ordFiltro!=='tutti'&&o.stato!==ordFiltro)return false;
+      if(!searchLow)return true;
+      var hay=(o.nomeCliente||'');
+      (o.items||[]).forEach(function(it){hay+=' '+(it.desc||'')+' '+(it.codF||'')+' '+(it.codM||'');});
+      return hay.toLowerCase().indexOf(searchLow)>=0;
+    });
+  }
 
   filtered.sort(function(a,b){return(b.createdAt||'').localeCompare(a.createdAt||'');});
 
-  if(!filtered.length){
+  if(!filtered.length && !bozze.length){
     list.innerHTML='<div style="text-align:center;padding:60px 20px;color:#444;"><div style="font-size:40px;margin-bottom:8px;">📋</div>'+(searchLow?'Nessun risultato':'Nessun ordine')+'</div>';
     return;
   }
@@ -569,6 +685,91 @@ function renderOrdini(){
   var SC={nuovo:'#f5c400',lavorazione:'#3182ce',pronto:'#dd6b20',completato:'#38a169'};
   var SL={nuovo:'NUOVO',lavorazione:'IN CORSO',pronto:'PRONTO',completato:'COMPLETATO'};
   var SBG={nuovo:'#f5c400',lavorazione:'#3182ce',pronto:'#dd6b20',completato:'#38a169'};
+
+  var h='';
+
+  // ── SEZIONE BOZZE ─────────────────────────────────────────────
+  if(bozze.length){
+    h+='<div class="ord-date-sep">';
+    h+='<span class="ord-date-line" style="background:#3182ce44;"></span>';
+    h+='<span class="ord-date-label" style="color:#63b3ed;">📡</span>';
+    h+='<span class="ord-date-line" style="background:#3182ce44;"></span>';
+    h+='</div>';
+    bozze.forEach(function(ord){
+      var gi=ordini.indexOf(ord);
+      var nArt=(ord.items||[]).length;
+      var tot=0;
+      (ord.items||[]).forEach(function(it){tot+=parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0);});
+      h+='<div class="ord-card ord-card--bozza" style="position:relative;">';
+      // Banner pulsante
+      h+='<div class="ord-card-stato ord-card-stato--bozza">';
+      h+='📡 🔨 ⚡';
+      h+='</div>';
+      // Cliente
+      h+='<div class="ord-card-cliente">';
+      h+='<div class="ord-cliente-nome" style="color:#90cdf4;">'+esc(ord.nomeCliente||'—')+'</div>';
+      h+='<div class="ord-cliente-meta">';
+      h+=esc(ord.data||'')+(ord.ora?' · '+ord.ora:'');
+      h+=' · '+nArt+' articol'+(nArt===1?'o':'i')+' · <span style="color:#63b3ed;font-weight:700;">Dal banco</span>';
+      h+='</div>';
+      h+='</div>';
+      // Griglia articoli
+      h+='<div class="ord-items-wrap">';
+      h+='<div class="ord-grid ord-grid-head">';
+      h+='<div class="ord-gh">Prodotto</div>';
+      h+='<div class="ord-gh ord-gh-c">Qtà</div>';
+      h+='<div class="ord-gh ord-gh-c">Prezzo</div>';
+      h+='<div class="ord-gh ord-gh-c">Tot</div>';
+      h+='</div>';
+      (ord.items||[]).forEach(function(it,ii){
+        var pu=parsePriceIT(it.prezzoUnit);
+        var q=parseFloat(it.qty||0);
+        var sub=(pu*q).toFixed(2);
+        var prezzoManca=(!it.prezzoUnit||it.prezzoUnit==='0'||it.prezzoUnit===0||it.prezzoUnit==='');
+        h+='<div class="ord-grid ord-grid-row'+(ii%2===0?' ord-grid-even':' ord-grid-odd')+'">';
+        h+='<div class="ord-gc-desc">';
+        h+='<div class="ord-item-name">'+esc(it.desc||'—')+'</div>';
+        if(it.codM||it.codF){
+          h+='<div class="ord-item-codes">';
+          if(it.codM) h+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
+          if(it.codF) h+='<span class="ord-code-forn">'+esc(it.codF)+'</span>';
+          h+='</div>';
+        }
+        h+='</div>';
+        h+='<div class="ord-gc-qty">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
+        // Prezzo — editabile inline (l'ufficio può inserirlo)
+        h+='<div class="ord-gc-price ord-editable" onclick="ordBozzaSetPrezzo(\''+ord.id+'\','+ii+',this)" title="Tap per inserire prezzo">';
+        if(prezzoManca){
+          h+='<span style="color:#fc8181;font-size:11px;font-weight:800;">— €?</span>';
+        } else {
+          h+='€'+pu.toFixed(2);
+        }
+        h+='</div>';
+        h+='<div class="ord-gc-sub">';
+        if(prezzoManca){
+          h+='<span style="color:#555;font-size:11px;">—</span>';
+        } else {
+          h+='€'+sub;
+        }
+        h+='</div>';
+        h+='</div>';
+      });
+      h+='</div>';// fine ord-items-wrap
+      // Totale
+      h+='<div class="ord-total-bar">';
+      h+='<span class="ord-total-label">TOTALE</span>';
+      h+='<span class="ord-total-value" style="color:#63b3ed;">€ '+tot.toFixed(2)+(tot===0?' <span style="font-size:12px;color:#555;">prezzi da inserire</span>':'')+'</span>';
+      h+='</div>';
+      // Nota se presente
+      if(ord.nota){
+        h+='<div style="padding:6px 12px;font-size:12px;color:#f6ad55;white-space:pre-wrap;word-break:break-word;">📋 '+esc(ord.nota)+'</div>';
+      }
+      // Info
+      h+='<div style="padding:8px 14px 12px;font-size:11px;color:#3182ce;font-style:italic;">⚡ Ordine in costruzione dal banco — aggiornato in tempo reale</div>';
+      h+='</div>'; // fine ord-card--bozza
+      h+='<div class="ord-spacer"><div class="ord-spacer-line"></div></div>';
+    });
+  }
 
   // Raggruppa per data
   var gruppi={},gruppiOrd=[];
@@ -587,7 +788,7 @@ function renderOrdini(){
     gruppi[dk].push(o);
   });
 
-  var h='';
+  // NON resettare h — contiene già le bozze renderizzate sopra
   gruppiOrd.forEach(function(dk){
     // ── SEPARATORE DATA — banda piena ──
     h+='<div class="ord-date-sep">';
@@ -625,11 +826,19 @@ function renderOrdini(){
       h+='<div class="ord-card-stato" style="background:'+sc+';color:'+(ost==='nuovo'?'#111':'#fff')+'">';
       h+=SL[ost];
       if(ord.numero) h+=' — #'+ord.numero;
+      if(ord.modificato){
+        var diffTxt = (ord.modificheDiff && ord.modificheDiff.length) ? ord.modificheDiff.join('\\n') : '';
+        h+=' <span onclick="event.stopPropagation();ordMostraModifiche(\''+ord.id+'\')" style="background:#553c9a;color:#e9d8fd;font-size:10px;padding:1px 7px;border-radius:8px;letter-spacing:.5px;font-weight:700;vertical-align:middle;cursor:pointer;" title="Vedi modifiche">✏️ MODIFICATO</span>';
+      }
       h+='</div>';
 
       // ── CLIENTE + DATA ──
       h+='<div class="ord-card-cliente">';
-      h+='<div class="ord-cliente-nome">'+esc(ord.nomeCliente||'—')+'</div>';
+      if(_canEdit){
+        h+='<div class="ord-cliente-nome" onclick="ordEditCliente('+gi+')" style="cursor:pointer;" title="Tap per modificare">'+esc(ord.nomeCliente||'—')+'</div>';
+      } else {
+        h+='<div class="ord-cliente-nome">'+esc(ord.nomeCliente||'—')+'</div>';
+      }
       h+='<div class="ord-cliente-meta">';
       h+=esc(ord.data||'')+(ord.ora?' · '+ord.ora:'');
       h+=' · '+nArt+' articol'+(nArt===1?'o':'i');
@@ -656,7 +865,7 @@ function renderOrdini(){
         var prezOrigNum=0;
         var prezFinNum=pu;
         var hasSconto=false;
-        var scOn=it.scampolo||it.fineRotolo||false;
+        var scOn=it.scampolo||it.fineRotolo||it._scaglionato||false;
         var scagAtt=it._scaglioneAttivo||null;
         if(scagAtt && it._prezzoBase){
           prezOrigNum=parsePriceIT(it._prezzoBase);
@@ -694,8 +903,10 @@ function renderOrdini(){
         // Prezzo unitario — con sconto sbarrato se presente
         h+='<div class="ord-gc-price'+(_canEdit?' ord-editable':'')+'"'+(_canEdit?' onclick="ordInlineEdit(this,'+gi+','+ii+',\'price\')" title="Tap per modificare"':'')+'>';
         if(hasSconto){
+          var savUnit = (prezOrigNum - pu).toFixed(2);
           h+='<div class="ct-old--orig">€'+prezOrigNum.toFixed(2)+'</div>';
           h+='<div class="ct-sub--final">€'+pu.toFixed(2)+'</div>';
+          h+='<div style="font-size:8px;color:#f6ad55;text-align:center;">-€'+savUnit+'</div>';
         } else {
           h+='€'+pu.toFixed(2);
         }
@@ -704,8 +915,10 @@ function renderOrdini(){
         // Subtotale — con sconto sbarrato se presente
         h+='<div class="ord-gc-sub">';
         if(hasSconto){
+          var savTot = ((prezOrigNum - pu) * q).toFixed(2);
           h+='<div class="ct-old--orig">€'+(prezOrigNum*q).toFixed(2)+'</div>';
           h+='<div class="ct-sub--final">€'+sub+'</div>';
+          h+='<div style="font-size:8px;color:#f6ad55;text-align:center;">-€'+savTot+'</div>';
         } else {
           h+='€'+sub;
         }
@@ -713,23 +926,38 @@ function renderOrdini(){
         h+='</div>'; // fine ord-grid-row
 
         // Mini azioni articolo — forbici + nota (fuori dalla griglia, div separato)
-        var scOn2 = it.scampolo||it.fineRotolo||false;
+        var scOn2 = it.scampolo||it.fineRotolo||it._scaglionato||false;
         var hasNota2 = !!(it.nota && it.nota.trim());
         var sc2 = it._scontoApplicato||0;
-        var actClass = it._tuttoRotolo||it.fineRotolo ? 'ord-actions-rotolo' : (it.scampolo ? 'ord-actions-scampolo' : '');
+        var actClass = it._scaglionato ? 'ord-actions-scaglionato' : (it._tuttoRotolo||it.fineRotolo ? 'ord-actions-rotolo' : (it.scampolo ? 'ord-actions-scampolo' : ''));
+        if(_canEdit){
           h+='<div class="ord-item-actions '+ actClass +'" style="display:flex;gap:4px;align-items:center;padding:2px 8px;">';
-          // Forbici
-          var forbLbl2 = it._tuttoRotolo?'ROT':(scOn2?(it.fineRotolo?'ROT':'SCA'):'');
-          h+='<button class="ord-mini-btn'+(scOn2||it._tuttoRotolo?' ord-mini-on':'')+'" onclick="ordToggleScampolo('+gi+','+ii+')" title="Scampolo/Rotolo">';
+          // Forbici — ciclo: OFF→SCA→ROT→SCAG→OFF
+          var forbLbl2 = it._scaglionato?'SCAG':(it._tuttoRotolo?'ROT':(scOn2?(it.fineRotolo?'ROT':'SCA'):''));
+          var forbColor = it._scaglionato ? 'color:#63b3ed;border-color:#63b3ed44;background:#08082a;' : (scOn2||it._tuttoRotolo ? '' : '');
+          h+='<button class="ord-mini-btn'+(scOn2||it._tuttoRotolo?' ord-mini-on':'')+'" style="'+forbColor+'" onclick="ordToggleScampolo('+gi+','+ii+')" title="Scampolo/Rotolo/Scaglionato">';
           h+='✂'+(forbLbl2?' '+forbLbl2:'')+'</button>';
           // % sconto inline
-          if(scOn2||it._tuttoRotolo){
+          if(scOn2||it._tuttoRotolo||it._scaglionato){
             h+='<input type="number" min="0" max="100" value="'+(sc2||'')+'" placeholder="%" class="ord-mini-pct" onchange="ordSetSconto('+gi+','+ii+',this.value)" onclick="event.stopPropagation();this.select()">';
-            h+='<span style="font-size:9px;color:#68d391">%</span>';
+            h+='<span style="font-size:9px;color:'+(it._scaglionato?'#63b3ed':'#68d391')+'">%</span>';
+          }
+          // Quantità minima scaglione
+          if(it._scaglionato){
+            h+='<span style="font-size:9px;color:#63b3ed;">da</span>';
+            h+='<input type="number" min="1" value="'+(it._scaglioneQta||10)+'" placeholder="qty" class="ord-mini-pct" style="color:#63b3ed;border-color:#63b3ed44;" onchange="ordSetScaglioneQta('+gi+','+ii+',this.value)" onclick="event.stopPropagation();this.select()">';
+            h+='<span style="font-size:9px;color:#63b3ed;">pz</span>';
           }
           // Nota articolo
           h+='<button class="ord-mini-btn'+(hasNota2?' ord-mini-on':'')+'" onclick="ordEditNota('+gi+','+ii+')" title="Nota" style="margin-left:auto">📝</button>';
           h+='</div>';
+        } else if(hasNota2||scOn2){
+          h+='<div style="padding:1px 8px;font-size:9px;color:#666;">';
+          if(it._scaglionato&&sc2) h+='<span style="color:#63b3ed;">📦 Scaglionato -'+sc2+'% da '+(it._scaglioneQta||10)+'pz</span> ';
+          else if(scOn2&&sc2) h+='<span>✂ -'+sc2+'%</span> ';
+          if(hasNota2) h+='<span>📝 '+esc(it.nota)+'</span>';
+          h+='</div>';
+        }
 
       });
 
@@ -741,7 +969,7 @@ function renderOrdini(){
         h+='<input type="text" class="ord-nota-input" value="'+esc(ord.nota||'')+'" placeholder="📋 Nota ordine..." onchange="ordSetNotaOrdine('+gi+',this.value)" onclick="event.stopPropagation()">';
         h+='</div>';
       } else if(ord.nota){
-        h+='<div style="padding:6px 12px;font-size:13px;color:var(--accent);font-weight:700;">📋 '+esc(ord.nota)+'</div>';
+        h+='<div style="padding:6px 12px;font-size:13px;color:var(--accent);font-weight:700;white-space:pre-wrap;word-break:break-word;">📋 '+esc(ord.nota)+'</div>';
       }
 
       // ── TOTALE ORDINE — grande e visibile ──
@@ -755,7 +983,7 @@ function renderOrdini(){
         // Completato e bloccato: solo Sblocca, Stampa, Elimina
         h+='<div class="ord-actions">';
         h+='<button onclick="ordSbloccaFatto('+gi+')" class="ord-abtn ord-abtn--reopen">🔓 Sblocca</button>';
-        h+='<button onclick="stampaRicevuta(ordini['+gi+'].items,ordini['+gi+'].nomeCliente,ordini['+gi+'].totale,ordini['+gi+'].nota)" class="ord-abtn ord-abtn--print">🖨️ Stampa</button>';
+        h+='<button onclick="ordStampaDblTap(this,'+gi+')" class="ord-abtn ord-abtn--print">🖨️ Stampa</button>';
         h+='<button onclick="deleteOrdine('+gi+')" class="ord-abtn ord-abtn--del">🗑️ Elimina</button>';
         h+='</div>';
       } else {
@@ -769,7 +997,7 @@ function renderOrdini(){
         h+='<button onclick="openCassa('+gi+')" class="ord-abtn ord-abtn--cassa">💰 Cassa</button>';
         h+='</div>';
         h+='<div class="ord-actions ord-actions-sec">';
-        h+='<button onclick="stampaRicevuta(ordini['+gi+'].items,ordini['+gi+'].nomeCliente,ordini['+gi+'].totale,ordini['+gi+'].nota)" class="ord-abtn ord-abtn--print">🖨️ Stampa</button>';
+        h+='<button onclick="ordStampaDblTap(this,'+gi+')" class="ord-abtn ord-abtn--print">🖨️ Stampa</button>';
         if(ost!=='lavorazione') h+='<button onclick="setStatoOrdine('+gi+',\'lavorazione\')" class="ord-abtn ord-abtn--wip">⏳ In corso</button>';
         if(ost!=='pronto') h+='<button onclick="setStatoOrdine('+gi+',\'pronto\')" class="ord-abtn ord-abtn--ready">📦 Pronto</button>';
         h+='<button onclick="deleteOrdine('+gi+')" class="ord-abtn ord-abtn--del">🗑️ Elimina</button>';
@@ -789,25 +1017,84 @@ function renderOrdini(){
 var _autoRefreshInterval=null;
 var _lastOrdiniJson='';
 
+var _bozzaBadgeLast = -1; // -1 = primo avvio, non notificare
+function _updateBozzaBadge(){
+  var nBozze=ordini.filter(function(o){return o.stato==='bozza';}).length;
+  // Notifica solo se arrivano bozze NUOVE (non al primo avvio)
+  if(_bozzaBadgeLast >= 0 && nBozze > _bozzaBadgeLast){
+    var toTab=document.getElementById('to');
+    var tabAttiva = toTab && toTab.classList.contains('active');
+    if(!tabAttiva){
+      showToastGen('blue','📡 Banco: ordine in costruzione!');
+      var tbbTo=document.getElementById('tbb-to');
+      if(tbbTo){ tbbTo.style.color='#63b3ed'; setTimeout(function(){tbbTo.style.color='';},3000); }
+    } else {
+      showToastGen('blue','📡 Banco: ordine in costruzione!');
+    }
+  }
+  _bozzaBadgeLast = nBozze;
+  // Tasto filtro "In costruzione" nella barra filtri
+  var btn=document.getElementById('ord-f-bozza');
+  var nbadge=document.getElementById('ord-f-bozza-n');
+  if(btn){
+    btn.style.display= nBozze>0 ? '' : 'none';
+    if(nbadge) nbadge.textContent= nBozze>0 ? nBozze : '';
+    if(nBozze===0 && typeof ordFiltro!=='undefined' && ordFiltro==='bozza'){
+      filterOrdini('tutti');
+    }
+  }
+  // Badge 📡 sul tasto tab ordini nella bottom bar
+  var bb=document.getElementById('bozza-badge');
+  if(!bb){
+    var tbbTo=document.getElementById('tbb-to');
+    if(tbbTo){
+      bb=document.createElement('span');
+      bb.id='bozza-badge';
+      bb.style.cssText='background:#3182ce;color:#fff;border-radius:8px;padding:1px 5px;font-size:9px;margin-left:2px;';
+      tbbTo.appendChild(bb);
+    }
+  }
+  if(bb){
+    bb.textContent= nBozze>0 ? '📡'+nBozze : '';
+    bb.style.display= nBozze>0 ? '' : 'none';
+  }
+}
+
 function startAutoRefresh(){
   _lastOrdiniJson=JSON.stringify(ordini);
+  _updateBozzaBadge(); // controlla subito all'avvio
   _autoRefreshInterval=setInterval(function(){
     var fresh=lsGet(ORDK,[]);
     var freshJson=JSON.stringify(fresh);
     if(freshJson!==_lastOrdiniJson){
+      var prevJson=_lastOrdiniJson;
+      var prev=JSON.parse(prevJson)||[];
+      var prevBozze=prev.filter(function(o){return o.stato==='bozza';}).length;
+      var prevNuovi=prev.filter(function(o){return o.stato==='nuovo';}).length;
       _lastOrdiniJson=freshJson;
       ordini=fresh;
       updateOrdBadge();
       updateOrdCounter();
-      // Se la tab ordini - visibile, aggiorna
+      _updateBozzaBadge();
+      // Se la tab ordini è visibile, aggiorna
       var toTab=document.getElementById('to');
       if(toTab&&toTab.classList.contains('active')){
         renderOrdini();
+      } else {
+        // Tab non attiva: se è arrivata una bozza nuova, notifica l'ufficio
+        var nuoveBozze=fresh.filter(function(o){return o.stato==='bozza';}).length;
+        if(nuoveBozze>prevBozze){
+          var tbbTo=document.getElementById('tbb-to');
+          if(tbbTo){
+            tbbTo.style.color='#63b3ed';
+            setTimeout(function(){tbbTo.style.color='';},3000);
+          }
+          showToastGen('blue','📡 Banco: ordine in costruzione!');
+        }
       }
-      // Notifica sonora per nuovi ordini
-      var nuovi=ordini.filter(function(o){return o.stato==='nuovo';}).length;
-      var vecchiNuovi=JSON.parse(_lastOrdiniJson||'[]').filter(function(o){return o.stato==='nuovo';}).length;
-      if(nuovi>vecchiNuovi){
+      // Notifica sonora per nuovi ordini normali
+      var nuovi=fresh.filter(function(o){return o.stato==='nuovo';}).length;
+      if(nuovi>prevNuovi){
         feedbackSend();
       }
     }
@@ -815,7 +1102,18 @@ function startAutoRefresh(){
 }
 
 // --- CONTATORE ORDINI IN ATTESA -------------------------------
+var _lastBozzeCount = 0;
 function updateOrdCounter(){
+  _updateBozzaBadge();
+  // Se arrivano bozze nuove via Firebase sync, aggiorna il render
+  var curBozze = ordini.filter(function(o){ return o.stato==='bozza'; }).length;
+  if(curBozze !== _lastBozzeCount){
+    _lastBozzeCount = curBozze;
+    var toTab = document.getElementById('to');
+    if(toTab && toTab.classList.contains('active') && !document.querySelector('.ord-inline-input')){
+      renderOrdini();
+    }
+  }
   var banner=document.getElementById('ord-counter-banner');
   if(!banner)return;
 
@@ -839,11 +1137,14 @@ function updateOrdCounter(){
   } else if(ordFiltro==='completato'){
     count=ordini.filter(function(o){return o.stato==='completato';}).length;
     label='Fatt'+(count===1?'o':'i'); icon='✅'; color='#68d391'; bg='#0d1a0d'; border='1px solid #38a16944';
+  } else if(ordFiltro==='bozza'){
+    count=ordini.filter(function(o){return o.stato==='bozza';}).length;
+    label=''; icon='📡'; color='#63b3ed'; bg='#0a1020'; border='1px solid #3182ce44';
   } else {
     // "tutti" — nessun contatore
     banner.style.display='none';
     var fc=document.getElementById('ord-filter-count');
-    if(fc){ fc.textContent=ordini.length; }
+    if(fc){ fc.textContent=ordini.filter(function(o){return o.stato!=='bozza';}).length; }
     return;
   }
 
@@ -941,7 +1242,7 @@ function renderOrdiniByDate(){
     (ord.items||[]).forEach(function(it){tot+=parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0);});
 
     h+='<div class="ord-card" style="border-top:4px solid '+sc+';margin-bottom:14px;">';
-    h+='<div class="ord-card-stato" style="background:'+sc+';color:'+(ost==='nuovo'?'#111':'#fff')+'">'+SL[ost];
+    h+='<div class="ord-card-stato" style="background:'+sc+';color:'+(ost==='nuovo'?'#111':'#fff')+'">'+SL[ost]+(ord.modificato?' <span style="background:#553c9a;color:#e9d8fd;font-size:10px;padding:1px 7px;border-radius:8px;letter-spacing:.5px;font-weight:700;vertical-align:middle;">MODIFICATO</span>':'');
     if(ord.numero) h+=' — #'+ord.numero;
     h+='</div>';
     h+='<div class="ord-card-cliente">';
@@ -949,7 +1250,7 @@ function renderOrdiniByDate(){
     h+='<div class="ord-cliente-meta">'+esc(ord.data||'')+(ord.ora?' · '+ord.ora:'')+' · '+(ord.items||[]).length+' articol'+((ord.items||[]).length===1?'o':'i')+'</div>';
     h+='</div>';
 
-    if(ord.nota) h+='<div class="ord-nota">📝 '+esc(ord.nota)+'</div>';
+    if(ord.nota) h+='<div class="ord-nota" style="white-space:pre-wrap;word-break:break-word;">📝 '+esc(ord.nota)+'</div>';
 
     // Articoli in grid
     h+='<div class="ord-items-wrap">';
@@ -2184,27 +2485,39 @@ function ordDblTap(el, action, arg1, arg2){
 function ordToggleScampolo(gi, ii){
   var ord=ordini[gi]; if(!ord||!ord.items[ii]) return;
   var it=ord.items[ii];
-  if(!it.scampolo && !it.fineRotolo){
+  if(!it.scampolo && !it.fineRotolo && !it._scaglionato){
     // OFF -> Scampolo
     if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
-    it.scampolo=true; it.fineRotolo=false;
+    it.scampolo=true; it.fineRotolo=false; it._scaglionato=false;
     if(!it._scontoApplicato) it._scontoApplicato=30;
-    // Applica sconto al prezzoUnit
     it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-it._scontoApplicato/100)).toFixed(2);
   } else if(it.scampolo){
     // Scampolo -> Rotolo
-    it.scampolo=false; it.fineRotolo=true;
+    it.scampolo=false; it.fineRotolo=true; it._scaglionato=false;
     it._tuttoRotolo=true;
     it._scontoApplicato=0;
-    // Ripristina prezzo originale (rotolo intero = prezzo pieno)
     if(it._prezzoOriginale) it.prezzoUnit=it._prezzoOriginale;
+  } else if(it.fineRotolo || it._tuttoRotolo){
+    // Rotolo -> Scaglionato
+    it.scampolo=false; it.fineRotolo=false; it._tuttoRotolo=false;
+    it._scaglionato=true;
+    if(!it._scontoApplicato) it._scontoApplicato=5;
+    if(!it._scaglioneQta) it._scaglioneQta=10;
+    // Applica sconto se qty >= soglia
+    if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
+    var q=parseFloat(it.qty||0);
+    if(q >= it._scaglioneQta){
+      it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-it._scontoApplicato/100)).toFixed(2);
+    } else {
+      it.prezzoUnit=it._prezzoOriginale;
+    }
   } else {
-    // Rotolo -> OFF: ripristina prezzo originale
-    it.scampolo=false; it.fineRotolo=false;
-    it._tuttoRotolo=false;
+    // Scaglionato -> OFF: ripristina
+    it.scampolo=false; it.fineRotolo=false; it._tuttoRotolo=false; it._scaglionato=false;
     if(it._prezzoOriginale) it.prezzoUnit=it._prezzoOriginale;
     delete it._prezzoOriginale;
     delete it._scontoApplicato;
+    delete it._scaglioneQta;
   }
   _ordRecalcSave(gi);
 }
@@ -2214,11 +2527,18 @@ function ordSetSconto(gi, ii, val){
   var it=ord.items[ii];
   var sc=parseFloat(val)||0;
   it._scontoApplicato=sc;
-  // Ricalcola prezzoUnit dal prezzo originale
-  if(it._prezzoOriginale && sc>0){
+  if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
+  if(it._scaglionato){
+    var q=parseFloat(it.qty||0);
+    var soglia=it._scaglioneQta||10;
+    if(sc>0 && q>=soglia){
+      it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-sc/100)).toFixed(2);
+    } else {
+      it.prezzoUnit=it._prezzoOriginale;
+    }
+  } else if(sc>0){
     it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-sc/100)).toFixed(2);
-  } else if(it._prezzoOriginale){
-    // Sconto = 0, ripristina originale
+  } else {
     it.prezzoUnit=it._prezzoOriginale;
   }
   _ordRecalcSave(gi);
@@ -2386,5 +2706,320 @@ function openSchedaFromOrdine(gi, ii){
     openSchedaRapida(idx);
   } else {
     showToastGen('orange','Articolo non trovato nel database');
+  }
+}
+
+// ── Modifica nome cliente ordine ─────────────────────────────────
+function ordEditCliente(gi){
+  var ord = ordini[gi];
+  if(!ord) return;
+  var nome = prompt('Nome cliente:', ord.nomeCliente || '');
+  if(nome === null) return;
+  ord.nomeCliente = nome.trim();
+  ord.modificato = true;
+  ord.modificatoAt = new Date().toLocaleString('it-IT');
+  saveOrdini();
+  // Aggiorna anche il carrello collegato
+  var cart = carrelli.find(function(c){ return c.ordId === ord.id; });
+  if(cart){ cart.nome = nome.trim(); saveCarrelli(); }
+  renderOrdini();
+  showToastGen('green', '✏️ Cliente aggiornato');
+}
+
+
+// ── Stampa / WhatsApp doppio tap ─────────────────────────────────
+var _stampaDblTimer = null;
+var _stampaDblGi = null;
+
+function ordStampaDblTap(btn, gi){
+  if(_stampaDblGi === gi){
+    // SECONDO TAP → WhatsApp
+    clearTimeout(_stampaDblTimer);
+    _stampaDblGi = null;
+    btn.textContent = '🖨️ Stampa';
+    btn.style.background = '';
+    ordInviaWhatsApp(gi);
+  } else {
+    // PRIMO TAP → Stampa ricevuta
+    if(_stampaDblTimer) clearTimeout(_stampaDblTimer);
+    _stampaDblGi = gi;
+    var ord = ordini[gi];
+    if(ord) stampaRicevutaConSconti(ord);
+    btn.textContent = '📱 WhatsApp?';
+    btn.style.background = '#25d366';
+    _stampaDblTimer = setTimeout(function(){
+      _stampaDblGi = null;
+      btn.textContent = '🖨️ Stampa';
+      btn.style.background = '';
+    }, 3000);
+  }
+}
+
+// ── Ricevuta con sconti dettagliati ──────────────────────────────
+function stampaRicevutaConSconti(ord){
+  var items = ord.items || [];
+  var h = '';
+  h += '<div style="font-size:16px;font-weight:900;text-align:center;margin-bottom:4px;">FERRAMENTA RATTAZZI</div>';
+  h += '<div style="font-size:10px;text-align:center;color:#666;margin-bottom:8px;">' + new Date().toLocaleString('it-IT') + '</div>';
+  if(ord.nomeCliente) h += '<div style="font-size:13px;font-weight:700;text-align:center;margin-bottom:8px;">Cliente: ' + esc(ord.nomeCliente) + '</div>';
+  if(ord.numero) h += '<div style="font-size:11px;text-align:center;color:#888;margin-bottom:6px;">Ordine #' + ord.numero + '</div>';
+  h += '<div style="border-top:1px dashed #555;margin:6px 0;"></div>';
+
+  var totaleRisparmio = 0;
+
+  items.forEach(function(it){
+    var pu = parsePriceIT(it.prezzoUnit);
+    var q = parseFloat(it.qty || 0);
+    var sub = (pu * q).toFixed(2);
+
+    // Calcola prezzo originale e sconto
+    var prezOrig = 0;
+    var hasSconto = false;
+    var scPct = 0;
+    if(it._scontoApplicato && it._scontoApplicato > 0 && it._prezzoOriginale){
+      prezOrig = parsePriceIT(it._prezzoOriginale);
+      hasSconto = prezOrig > pu + 0.005;
+      scPct = it._scontoApplicato;
+    } else if(it._scaglioneAttivo && it._prezzoBase){
+      prezOrig = parsePriceIT(it._prezzoBase);
+      hasSconto = prezOrig > pu + 0.005;
+      scPct = it._scaglioneAttivo.sconto || 0;
+    }
+
+    h += '<div style="padding:4px 0;border-bottom:1px solid #2a2a2a;">';
+    h += '<div style="font-size:13px;font-weight:700;color:var(--text);">' + esc(it.desc || '') + '</div>';
+
+    if(hasSconto){
+      var savUnit = (prezOrig - pu).toFixed(2);
+      var savTot = ((prezOrig - pu) * q).toFixed(2);
+      totaleRisparmio += (prezOrig - pu) * q;
+
+      var tipoSc = it.scampolo ? 'Scampolo' : (it.fineRotolo ? 'Rotolo' : 'Sconto');
+      h += '<div style="font-size:10px;color:#f6ad55;font-weight:700;">' + tipoSc + ' -' + scPct + '%</div>';
+      h += '<div style="display:flex;justify-content:space-between;font-size:11px;color:#888;">';
+      h += '<span>' + q + ' ' + (it.unit || 'pz') + '</span>';
+      h += '<span style="text-decoration:line-through;">€' + prezOrig.toFixed(2) + '</span>';
+      h += '<span style="color:var(--accent);font-weight:900;">€' + pu.toFixed(2) + '</span>';
+      h += '<span style="color:#f6ad55;">-€' + savUnit + '</span>';
+      h += '</div>';
+      h += '<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:900;color:var(--accent);">';
+      h += '<span>Totale</span>';
+      h += '<span style="text-decoration:line-through;color:#888;font-weight:600;">€' + (prezOrig * q).toFixed(2) + '</span>';
+      h += '<span>€' + sub + '</span>';
+      h += '<span style="color:#f6ad55;">-€' + savTot + '</span>';
+      h += '</div>';
+    } else {
+      h += '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);">';
+      h += '<span>' + q + ' ' + (it.unit || 'pz') + ' × €' + pu.toFixed(2) + '</span>';
+      h += '<span style="font-weight:900;color:var(--accent);">€' + sub + '</span>';
+      h += '</div>';
+    }
+
+    if(it.nota) h += '<div style="font-size:10px;color:var(--accent);font-style:italic;">📝 ' + esc(it.nota) + '</div>';
+    h += '</div>';
+  });
+
+  h += '<div style="border-top:1px dashed #555;margin:6px 0;"></div>';
+  h += '<div style="display:flex;justify-content:space-between;font-size:18px;font-weight:900;color:var(--accent);padding:4px 0;">';
+  h += '<span>TOTALE</span><span>€ ' + (ord.totale || '0.00') + '</span></div>';
+
+  if(totaleRisparmio > 0.01){
+    h += '<div style="text-align:center;font-size:12px;color:#f6ad55;font-weight:800;padding:4px 0;">Risparmi: -€' + totaleRisparmio.toFixed(2) + '</div>';
+  }
+
+  if(ord.nota) h += '<div style="border-top:1px dashed #555;margin:6px 0;"></div><div style="font-size:11px;color:#666;font-style:italic;">' + esc(ord.nota) + '</div>';
+
+  var ov = document.getElementById('ricevuta-overlay');
+  document.getElementById('ricevuta-body').innerHTML = h;
+  ov.classList.add('open');
+}
+
+// ── Invia ordine via WhatsApp ────────────────────────────────────
+function ordInviaWhatsApp(gi){
+  var ord = ordini[gi];
+  if(!ord) return;
+  var items = ord.items || [];
+
+  var msg = '*FERRAMENTA RATTAZZI*\n';
+  msg += '📋 Ordine' + (ord.numero ? ' #' + ord.numero : '') + '\n';
+  msg += '👤 ' + (ord.nomeCliente || '—') + '\n';
+  msg += '📅 ' + (ord.data || '') + ' ' + (ord.ora || '') + '\n';
+  msg += '─────────────\n';
+
+  var totaleRisparmio = 0;
+
+  items.forEach(function(it){
+    var pu = parsePriceIT(it.prezzoUnit);
+    var q = parseFloat(it.qty || 0);
+    var sub = (pu * q).toFixed(2);
+
+    var prezOrig = 0;
+    var hasSconto = false;
+    var scPct = 0;
+    if(it._scontoApplicato && it._scontoApplicato > 0 && it._prezzoOriginale){
+      prezOrig = parsePriceIT(it._prezzoOriginale);
+      hasSconto = prezOrig > pu + 0.005;
+      scPct = it._scontoApplicato;
+    } else if(it._scaglioneAttivo && it._prezzoBase){
+      prezOrig = parsePriceIT(it._prezzoBase);
+      hasSconto = prezOrig > pu + 0.005;
+      scPct = it._scaglioneAttivo.sconto || 0;
+    }
+
+    msg += '• ' + (it.desc || '') + '\n';
+    msg += '  ' + q + ' ' + (it.unit || 'pz');
+
+    if(hasSconto){
+      var savUnit = (prezOrig - pu).toFixed(2);
+      var savTot = ((prezOrig - pu) * q).toFixed(2);
+      totaleRisparmio += (prezOrig - pu) * q;
+      var tipoSc = it.scampolo ? 'Scampolo' : (it.fineRotolo ? 'Rotolo' : 'Sconto');
+      msg += ' × ~€' + prezOrig.toFixed(2) + '~ → *€' + pu.toFixed(2) + '* (' + tipoSc + ' -' + scPct + '%, -€' + savUnit + ')\n';
+      msg += '  Totale: ~€' + (prezOrig * q).toFixed(2) + '~ → *€' + sub + '* (-€' + savTot + ')\n';
+    } else {
+      msg += ' × €' + pu.toFixed(2) + ' = *€' + sub + '*\n';
+    }
+
+    if(it.nota) msg += '  📝 ' + it.nota + '\n';
+  });
+
+  msg += '─────────────\n';
+  msg += '*TOTALE: € ' + (ord.totale || '0.00') + '*\n';
+
+  if(totaleRisparmio > 0.01){
+    msg += '💰 _Risparmi: -€' + totaleRisparmio.toFixed(2) + '_\n';
+  }
+
+  if(ord.nota) msg += '\n📋 _' + ord.nota + '_';
+
+  // Apri WhatsApp
+  var url = 'https://wa.me/?text=' + encodeURIComponent(msg);
+  window.open(url, '_blank');
+}
+
+// ── Imposta quantità minima per scaglione ────────────────────────
+function ordSetScaglioneQta(gi, ii, val){
+  var ord=ordini[gi]; if(!ord||!ord.items[ii]) return;
+  var it=ord.items[ii];
+  it._scaglioneQta = parseInt(val) || 10;
+  if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
+  var q = parseFloat(it.qty || 0);
+  if(it._scontoApplicato > 0 && q >= it._scaglioneQta){
+    it.prezzoUnit = (parsePriceIT(it._prezzoOriginale) * (1 - it._scontoApplicato/100)).toFixed(2);
+  } else {
+    it.prezzoUnit = it._prezzoOriginale;
+  }
+  _ordRecalcSave(gi);
+}
+
+// ── Override avvisaUfficio: forza render tab ordini subito ────────────────
+(function(){
+  var _origAvvisa = (typeof avvisaUfficio === 'function') ? avvisaUfficio : null;
+  if(!_origAvvisa) return;
+  avvisaUfficio = function(cartId){
+    _origAvvisa(cartId);
+    // Forza aggiornamento tab ordini se aperta, e badge sempre
+    _updateBozzaBadge();
+    var toTab = document.getElementById('to');
+    if(toTab && toTab.classList.contains('active')){
+      renderOrdini();
+    }
+  };
+})();
+
+// ── Override inviaOrdine: promuove la bozza a 'nuovo' invece di ricrearla ──
+(function(){
+  var _origInvia = (typeof inviaOrdine === 'function') ? inviaOrdine : null;
+  if(!_origInvia) return;
+  inviaOrdine = function(cartId){
+    var cart = carrelli.find(function(c){ return c.id === cartId; });
+    // Se c'è una bozza collegata, promuovila invece di ricreare l'ordine
+    if(cart && cart.bozzaOrdId){
+      var bozza = ordini.find(function(o){ return o.id === cart.bozzaOrdId; });
+      if(bozza && bozza.stato === 'bozza'){
+        // Aggiorna la bozza con i dati finali del carrello
+        var tot = (cart.items||[]).reduce(function(s,it){
+          return s + (_prezzoEffettivo(it) * parseFloat(it.qty||0));
+        }, 0);
+        bozza.stato     = 'nuovo';
+        bozza.numero    = getNextOrdNum();
+        bozza.items     = JSON.parse(JSON.stringify(cart.items||[]));
+        bozza.nota      = cart.nota || '';
+        bozza.totale    = tot.toFixed(2);
+        bozza.scontoGlobale = cart.scontoGlobale || null;
+        bozza.commesso  = cart.commesso || '';
+        bozza.promozione= new Date().toLocaleString('it-IT');
+        delete cart.bozzaOrdId;
+        // Sposta in cima
+        ordini = ordini.filter(function(o){ return o.id !== bozza.id; });
+        ordini.unshift(bozza);
+        saveOrdini();
+        // Segna carrello come inviato
+        cart.stato  = 'inviato';
+        cart.locked = true;
+        cart.ordId  = bozza.id;
+        saveCarrelli();
+        feedbackSend();
+        renderCartTabs();
+        showToastGen('green', '✅ Ordine #' + bozza.numero + ' confermato!');
+        return; // non chiamare _origInvia
+      }
+    }
+    // Nessuna bozza: comportamento originale
+    _origInvia(cartId);
+  };
+})();
+
+// ── Pulizia bozze orfane all'avvio ───────────────────────────────────────────
+// Converte in 'nuovo' le bozze che non hanno più un carrello attivo collegato
+// (es. create durante test, o carrello già inviato)
+(function _pulisciBozzeOrfane(){
+  var changed = false;
+  ordini.forEach(function(o){
+    if(o.stato !== 'bozza') return;
+    // Cerca se esiste un carrello con questa bozza collegata
+    var cartCollegato = carrelli.find(function(c){ return c.bozzaOrdId === o.id; });
+    if(!cartCollegato){
+      // Nessun carrello la "possiede" — promuovi a nuovo
+      o.stato = 'nuovo';
+      if(!o.numero) o.numero = getNextOrdNum();
+      changed = true;
+    }
+  });
+  if(changed){
+    saveOrdini();
+    setTimeout(function(){
+      _updateBozzaBadge();
+      renderOrdini && renderOrdini();
+    }, 500);
+  }
+})();
+
+// ── Popup modifiche ordine ────────────────────────────────────────────────────
+function ordMostraModifiche(ordId){
+  var ord = ordini.find(function(o){ return o.id === ordId; });
+  if(!ord) return;
+  // Rimuovi popup esistente se già aperto (toggle)
+  var existing = document.getElementById('modpop_' + ordId);
+  if(existing){ existing.remove(); return; }
+  var diff = (ord.modificheDiff && ord.modificheDiff.length) ? ord.modificheDiff : null;
+  var msg = diff ? diff.join('\n') : ('Modificato il ' + (ord.modificatoAt || '—'));
+  // Trova la card e inserisce il popup subito dopo la banda stato
+  var cards = document.querySelectorAll('.ord-card');
+  var target = null;
+  cards.forEach(function(c){
+    if(c.innerHTML.indexOf(ordId) >= 0) target = c;
+  });
+  var pop = document.createElement('div');
+  pop.id = 'modpop_' + ordId;
+  pop.style.cssText = 'background:#1e1040;border:1px solid #6b46c1;border-radius:10px;padding:10px 14px;margin:0 12px 8px;font-size:12px;color:#d6bcfa;white-space:pre-wrap;word-break:break-word;line-height:1.6;';
+  pop.innerHTML = '✏️ <b style="color:#e9d8fd;">Modifiche:</b>\n' + esc(msg) +
+    '<div style="text-align:right;margin-top:6px;"><button onclick="document.getElementById(\'modpop_'+ordId+'\').remove()" style="background:transparent;border:none;color:#6b46c1;font-size:11px;cursor:pointer;">✕ chiudi</button></div>';
+  // Inserisci dopo la banda stato dentro la card
+  if(target){
+    var stato = target.querySelector('.ord-card-stato');
+    if(stato && stato.nextSibling) target.insertBefore(pop, stato.nextSibling);
+    else if(stato) stato.after(pop);
+    else target.prepend(pop);
   }
 }

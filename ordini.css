@@ -309,3 +309,32 @@ body.light-mode .dao-group-header { border-color:#ddd; }
 .ord-unit-select option {
   background: #111; color: #ccc;
 }
+
+/* Riga azioni scaglionato (azzurro) */
+.ord-actions-scaglionato {
+  background: rgba(99,179,237,.08);
+  border-left: 3px solid #63b3ed;
+}
+
+/* ── Card bozza — ordine in costruzione dal banco ── */
+.ord-card--bozza {
+  background: #0a0f1a !important;
+  border: 2px solid #3182ce55 !important;
+  border-top: 4px solid #3182ce !important;
+  animation: bozzaPulse 3s ease-in-out infinite;
+}
+@keyframes bozzaPulse {
+  0%,100% { border-color: #3182ce55; border-top-color: #3182ce; }
+  50%      { border-color: #63b3ed88; border-top-color: #90cdf4; }
+}
+.ord-card-stato--bozza {
+  background: #1a2744;
+  color: #63b3ed;
+  font-size: 11px;
+  letter-spacing: 2px;
+  padding: 7px 16px;
+  text-align: center;
+  font-weight: 900;
+}
+body.light-mode .ord-card--bozza { background: #eff8ff !important; border-color: #3182ce55 !important; }
+body.light-mode .ord-card-stato--bozza { background: #dbeafe; color: #1d4ed8; }

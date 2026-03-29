@@ -1635,6 +1635,7 @@ button[touch-action="manipulation"],
 .ct-icon-btn svg { width: 15px; height: 15px; }
 .ct-icon-btn--on { color: var(--ct-yellow); border-color: rgba(255,215,0,.4); background: rgba(255,215,0,.08); }
 .ct-icon-btn--rotolo { color: var(--ct-red); border-color: rgba(229,62,62,.5); background: rgba(229,62,62,.1); }
+.ct-icon-btn--scag { color: #63b3ed; border-color: rgba(99,179,237,.5); background: rgba(99,179,237,.1); }
 .ct-icon-btn--ordina span { font-size: 8px; }
 .ct-icon-btn--del { color: #555; border-color: transparent; }
 .ct-icon-btn--del:active { color: var(--ct-red); }
@@ -1801,6 +1802,9 @@ button[touch-action="manipulation"],
 .ct-fbtn--danger    { background: rgba(229,62,62,.15); border: 1px solid rgba(229,62,62,.4); color: #fc8181; }
 .ct-fbtn--riepilogo { background: rgba(255,215,0,.1);  border: 1px solid rgba(255,215,0,.35); color: var(--ct-yellow); }
 .ct-fbtn--cassa     { background: linear-gradient(135deg, var(--ct-yellow2), var(--ct-yellow)); color: #111; font-weight: 900; }
+.ct-fbtn--avvisa    { background: rgba(99,179,237,.12); border: 1px solid rgba(99,179,237,.4); color: #63b3ed; }
+.ct-fbtn--avvisa-on { background: rgba(99,179,237,.25); border: 1px solid #63b3ed; color: #90cdf4; animation: ctAvvisaPulse 2s ease-in-out infinite; }
+@keyframes ctAvvisaPulse { 0%,100%{box-shadow:0 0 0 0 rgba(99,179,237,.4)} 50%{box-shadow:0 0 0 6px rgba(99,179,237,0)} }
 .ct-fbtn--warn {
   background: rgba(229,62,62,.25) !important;
   border: 1px solid rgba(229,62,62,.6) !important;

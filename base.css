@@ -141,6 +141,11 @@ select{padding:3px 4px;border:1px solid var(--border);border-radius:3px;font-siz
   body{background:white;padding:0;}
   body > *{display:none!important;}
   #print-area{display:block!important;padding:0;width:100%;}
+  /* Cartellini: se l'anteprima overlay (#pov) è aperta, stampa da lì */
+  #pov.open{display:block!important;position:static!important;overflow:visible!important;background:white!important;padding:0!important;}
+  #pb{display:block!important;padding:0!important;background:white!important;}
+  #ph{display:none!important;}
+  #pc{display:block!important;padding:0!important;}
   .tag-row{page-break-inside:avoid;}
   .tag-row+.tag-row{border-top:.4px dashed #999;}
   .tag-small+.tag-small,.tag-large+.tag-large{border-left:.4px dashed #999;}
@@ -453,7 +458,7 @@ body.light-mode #fatture-popup button { color: #444; }
 
 /* DDT stampa — nasconde tutto tranne il DDT */
 @media print {
-  body > *:not(#ddt-print-overlay):not(#print-area) { display:none !important; }
+  body > *:not(#ddt-print-overlay):not(#print-area):not(#pov) { display:none !important; }
   #print-area { display:block !important; padding:0 !important; width:100% !important; }
   #ddt-print-overlay { position:static !important; overflow:visible !important; }
   #ddt-print-overlay > div:first-child { display:none !important; } /* nasconde toolbar */
