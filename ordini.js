@@ -112,13 +112,13 @@ var _editOrdItems=null;
 function modificaOrdineDaTab(gi){
   var ord=ordini[gi];
   if(!ord)return;
-  // Controlla se un altro account sta già lavorando su questo ordine (lock per-ordine)
+  // Controlla se un altro account ha il lock su questo ordine
   var lockInfo = ordIsLockedByOther(ord.id);
   if(lockInfo){
     showToastGen('orange','🔒 ' + (lockInfo.name||'Altro account') + ' sta modificando questo ordine');
     return;
   }
-  // Acquisisce il lock: segnala agli altri che stiamo lavorando su questo ordine
+  // Acquisisce il lock: segnala agli altri che stiamo lavorando
   ordLock(ord.id);
   _editOrdIdx=gi;
   _editOrdItems=JSON.parse(JSON.stringify(ord.items));
@@ -206,13 +206,13 @@ function salvaEditOrdine(){
   saveOrdini();
   var linkedCart=carrelli.find(function(c){return c.ordId===ord.id;});
   if(linkedCart){linkedCart.items=JSON.parse(JSON.stringify(_editOrdItems));saveCarrelli();}
-  // Rilascia il lock dopo il salvataggio (altri account possono ora modificare)
+  // Rilascia il lock dopo il salvataggio
   ordUnlock(ord.id);
   chiudiEditOrdine();feedbackSend();renderOrdini();
   showToastGen('purple','✅ Ordine #'+(ord.numero||'')+' aggiornato!');
 }
 function chiudiEditOrdine(){
-  // Rilascia il lock se si chiude senza salvare (annullamento)
+  // Rilascia il lock anche se si chiude senza salvare
   if(_editOrdIdx !== null && ordini[_editOrdIdx]){
     ordUnlock(ordini[_editOrdIdx].id);
   }
@@ -832,6 +832,15 @@ function renderOrdini(){
       var lockInfo = ordIsLockedByOther(ord.id);
       var isCompleted = ost==='completato';
       var unlocked = ord.unlocked || false;
+
+      // Calcolo ruolo/permessi PRIMA degli overlay (usati subito sotto)
+      var _myKey = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.key : null;
+      var _myRuolo = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.ruolo : 'proprietario';
+      var _ordCommesso = ord.commesso || null;
+      var _altruiOrdine = (_myRuolo !== 'proprietario' && _ordCommesso && _ordCommesso !== _myKey);
+      // Non editabile se: completato, ordine altrui, o bloccato da un altro account
+      var _canEdit = !(isCompleted && !unlocked) && !_altruiOrdine && !lockInfo;
+
       h+='<div class="ord-card'+(isCompleted&&!unlocked?' ord-card--done':'')+'" style="border-top:4px solid '+sc+';position:relative;">';
 
       // OVERLAY ACCOUNT - ordine di un altro commesso (solo proprietario può toccare)
@@ -847,13 +856,11 @@ function renderOrdini(){
 
       // OVERLAY LOCK - se un altro dispositivo sta lavorando
       if(lockInfo){
-        var busyWarn = (typeof getAccountBusyWarning === 'function') ? getAccountBusyWarning(ord.id) : '';
         h+='<div class="ord-lock-overlay" onclick="ordDblTap(this,\'force\',\''+ord.id+'\','+gi+')">';
         h+='<div class="ord-lock-msg">';
         h+='<div style="font-size:24px;margin-bottom:6px">🔒</div>';
         h+='<div style="font-size:14px;font-weight:800">IN LAVORAZIONE</div>';
         h+='<div style="font-size:11px;margin-top:4px;color:#aaa">'+esc(lockInfo.name||'Altro dispositivo')+'</div>';
-        if(busyWarn) h+='<div style="font-size:10px;margin-top:6px;color:#e9b800;background:rgba(255,215,0,.1);padding:4px 8px;border-radius:6px;">'+esc(busyWarn)+'</div>';
         h+='<div style="font-size:10px;margin-top:8px;color:#666">Triplo tap per forzare</div>';
         h+='</div></div>';
       }
@@ -890,13 +897,7 @@ function renderOrdini(){
       h+='<div class="ord-gh ord-gh-c">Tot</div>';
       h+='</div>';
 
-      // Blocco per account: commesso può modificare solo i propri ordini
-      var _myKey = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.key : null;
-      var _myRuolo = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.ruolo : 'proprietario';
-      var _ordCommesso = ord.commesso || null;
-      // Un commesso non può toccare ordini di un altro commesso (solo il proprietario può)
-      var _altruiOrdine = (_myRuolo !== 'proprietario' && _ordCommesso && _ordCommesso !== _myKey);
-      var _canEdit = !(isCompleted && !unlocked) && !_altruiOrdine; // bloccato = non editabile
+      // _myKey, _myRuolo, _ordCommesso, _altruiOrdine, _canEdit — già calcolati sopra
 
       (ord.items||[]).forEach(function(it,ii){
         var pu=parsePriceIT(it.prezzoUnit);
@@ -2480,21 +2481,19 @@ function cancelEditProdotto(){
 function ordForceLock(ordId, gi){
   var ord = ordini[gi];
   if(!ord) return;
-  // Recupera il nome di chi detiene il lock attualmente
-  var key = typeof _lockKey === 'function' ? _lockKey(ordId) : String(ordId);
+  var key = String(ordId).replace(/[.#$\/\[\]]/g, '_');
   var currentLock = _ordLocks[key];
   var holderName = currentLock ? (currentLock.name || 'altro account') : 'altro account';
-  // Richiede conferma esplicita prima di forzare (evita sblocchi accidentali)
-  if(!confirm('⚠️ Sblocco forzato\n\n' + holderName + ' sta lavorando su questo ordine.\n\nVuoi forzare l\'accesso? L\'altra sessione perderà il lock.')){
+  // Richiede conferma prima di forzare (evita sblocchi accidentali)
+  if(!confirm('⚠️ Sblocco forzato\n\n' + holderName + ' sta lavorando su questo ordine.\n\nVuoi forzare l\'accesso?')){
     return;
   }
-  // Acquisisce il lock a forza
   ordLock(ordId);
-  // Scrive una nota di log automatica visibile nel badge MODIFICATO (viola)
-  var chi = (_currentUser ? _currentUser.nome : 'Sconosciuto');
+  // Scrive nota di log visibile nel badge MODIFICATO (viola)
+  var chi = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.nome : 'Sconosciuto';
   var ora = new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
   if(!ord.modificheDiff) ord.modificheDiff = [];
-  ord.modificheDiff.unshift('⚠️ ' + ora + ' — Lock forzato da ' + chi + ' (precedente: ' + holderName + ')');
+  ord.modificheDiff.unshift('⚠️ ' + ora + ' — Lock forzato da ' + chi + ' (era: ' + holderName + ')');
   ord.modificato = true;
   ord.modificatoAt = new Date().toLocaleString('it-IT');
   ord.modificatoAtISO = new Date().toISOString();
