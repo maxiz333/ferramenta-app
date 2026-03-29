@@ -64,6 +64,11 @@ function aggiornaOrdine(cartId){
   ord.modificato=true;
   ord.modificatoAt=new Date().toLocaleString('it-IT');
   ord.modificatoAtISO=new Date().toISOString();
+  // Salva chi ha modificato
+  if(typeof _currentUser !== 'undefined' && _currentUser){
+    if(!ord.commesso) ord.commesso = _currentUser.key;
+    ord.modificatoDa = _currentUser.key;
+  }
   saveOrdini();
   // Rimetti il carrello come inviato
   cart.stato='inviato';
@@ -811,6 +816,17 @@ function renderOrdini(){
       var unlocked = ord.unlocked || false;
       h+='<div class="ord-card'+(isCompleted&&!unlocked?' ord-card--done':'')+'" style="border-top:4px solid '+sc+';position:relative;">';
 
+      // OVERLAY ACCOUNT - ordine di un altro commesso (solo proprietario può toccare)
+      if(_altruiOrdine && !lockInfo){
+        h+='<div class="ord-lock-overlay" onclick="ordDblTap(this,\'force\',\''+ord.id+'\','+gi+')">';
+        h+='<div class="ord-lock-msg">';
+        h+='<div style="font-size:24px;margin-bottom:6px">🔐</div>';
+        var _ordNomeCommesso = (typeof _roles !== 'undefined' && _roles[_ordCommesso]) ? _roles[_ordCommesso].nome : (_ordCommesso || 'altro account');
+        h+='<div style="font-size:14px;font-weight:800">ORDINE DI '+esc(_ordNomeCommesso).toUpperCase()+'</div>';
+        h+='<div style="font-size:10px;margin-top:8px;color:#666">Solo il proprietario può modificarlo</div>';
+        h+='</div></div>';
+      }
+
       // OVERLAY LOCK - se un altro dispositivo sta lavorando
       if(lockInfo){
         h+='<div class="ord-lock-overlay" onclick="ordDblTap(this,\'force\',\''+ord.id+'\','+gi+')">';
@@ -818,7 +834,7 @@ function renderOrdini(){
         h+='<div style="font-size:24px;margin-bottom:6px">🔒</div>';
         h+='<div style="font-size:14px;font-weight:800">IN LAVORAZIONE</div>';
         h+='<div style="font-size:11px;margin-top:4px;color:#aaa">'+esc(lockInfo.name||'Altro dispositivo')+'</div>';
-        h+='<div style="font-size:10px;margin-top:8px;color:#666">Doppio tap per forzare</div>';
+        h+='<div style="font-size:10px;margin-top:8px;color:#666">Triplo tap per forzare</div>';
         h+='</div></div>';
       }
 
@@ -854,7 +870,13 @@ function renderOrdini(){
       h+='<div class="ord-gh ord-gh-c">Tot</div>';
       h+='</div>';
 
-      var _canEdit = !(isCompleted && !unlocked); // bloccato = non editabile
+      // Blocco per account: commesso può modificare solo i propri ordini
+      var _myKey = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.key : null;
+      var _myRuolo = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.ruolo : 'proprietario';
+      var _ordCommesso = ord.commesso || null;
+      // Un commesso non può toccare ordini di un altro commesso (solo il proprietario può)
+      var _altruiOrdine = (_myRuolo !== 'proprietario' && _ordCommesso && _ordCommesso !== _myKey);
+      var _canEdit = !(isCompleted && !unlocked) && !_altruiOrdine; // bloccato = non editabile
 
       (ord.items||[]).forEach(function(it,ii){
         var pu=parsePriceIT(it.prezzoUnit);
@@ -2442,43 +2464,58 @@ function ordForceLock(ordId, gi){
 }
 
 // ── DOPPIO TAP UNIVERSALE ORDINI (Safari iOS compatibile) ────────
-// Sostituisce ondblclick che non funziona su iPhone.
-// Primo tap: evidenzia elemento. Secondo tap entro 400ms: esegue azione.
+// Tap multipli: doppio tap per edit normale, TRIPLO tap per forzare lock
 var _ordDblTapTimer = null;
 var _ordDblTapEl = null;
 var _ordDblTapKey = null;
+var _ordDblTapCount = 0;
 
 function ordDblTap(el, action, arg1, arg2){
-  // Risali al genitore con onclick se il tap cade su un figlio
   while(el && !el.getAttribute('onclick') && el.parentElement){
     el = el.parentElement;
   }
   var key = action + '_' + arg1 + '_' + arg2;
   if(_ordDblTapKey === key){
-    // SECONDO TAP — esegui azione
+    _ordDblTapCount++;
     clearTimeout(_ordDblTapTimer);
-    _ordDblTapKey = null;
-    if(_ordDblTapEl){ _ordDblTapEl.style.outline=''; _ordDblTapEl.style.outlineOffset=''; }
-    _ordDblTapEl = null;
     if(action === 'force'){
-      ordForceLock(arg1, arg2);
+      // Per il lock overlay: serve TRIPLO tap
+      if(_ordDblTapCount >= 2){
+        _ordDblTapKey = null; _ordDblTapCount = 0;
+        if(_ordDblTapEl){ _ordDblTapEl.style.outline=''; _ordDblTapEl.style.outlineOffset=''; }
+        _ordDblTapEl = null;
+        ordForceLock(arg1, arg2);
+        return;
+      }
+      // Secondo tap: mostra feedback "ancora un tap"
+      if(_ordDblTapEl){
+        _ordDblTapEl.style.outline='2px solid #e53e3e';
+        _ordDblTapEl.querySelector&&(_ordDblTapEl.querySelector('.ord-lock-msg')
+          && (_ordDblTapEl.querySelector('.ord-lock-msg').style.opacity='0.5'));
+      }
     } else {
+      // Per edit normale: doppio tap
+      _ordDblTapKey = null; _ordDblTapCount = 0;
+      if(_ordDblTapEl){ _ordDblTapEl.style.outline=''; _ordDblTapEl.style.outlineOffset=''; }
+      _ordDblTapEl = null;
       ordInlineEdit(el, arg1, arg2, action);
+      return;
     }
   } else {
-    // PRIMO TAP — evidenzia e aspetta
     if(_ordDblTapTimer) clearTimeout(_ordDblTapTimer);
     if(_ordDblTapEl){ _ordDblTapEl.style.outline=''; _ordDblTapEl.style.outlineOffset=''; }
     _ordDblTapKey = key;
     _ordDblTapEl = el;
+    _ordDblTapCount = 0;
     el.style.outline = '2px solid var(--accent)';
     el.style.outlineOffset = '-2px';
-    _ordDblTapTimer = setTimeout(function(){
-      if(_ordDblTapEl){ _ordDblTapEl.style.outline=''; _ordDblTapEl.style.outlineOffset=''; }
-      _ordDblTapKey = null;
-      _ordDblTapEl = null;
-    }, 500);
   }
+  _ordDblTapTimer = setTimeout(function(){
+    if(_ordDblTapEl){ _ordDblTapEl.style.outline=''; _ordDblTapEl.style.outlineOffset=''; }
+    _ordDblTapKey = null;
+    _ordDblTapEl = null;
+    _ordDblTapCount = 0;
+  }, 600);
 }
 
 // ── SCAMPOLO/ROTOLO/NOTA negli ordini ────────────────────────────
@@ -2947,7 +2984,7 @@ function ordSetScaglioneQta(gi, ii, val){
         bozza.nota      = cart.nota || '';
         bozza.totale    = tot.toFixed(2);
         bozza.scontoGlobale = cart.scontoGlobale || null;
-        bozza.commesso  = cart.commesso || '';
+        bozza.commesso  = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.key : (cart.commesso || '');
         bozza.promozione= new Date().toLocaleString('it-IT');
         delete cart.bozzaOrdId;
         // Sposta in cima

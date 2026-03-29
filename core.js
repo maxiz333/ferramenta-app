@@ -410,7 +410,9 @@ function _lockKey(ordId){ return String(ordId).replace(/[.#$/\[\]]/g, '_'); }
 function ordLock(ordId){
   if(!_fbReady || !_fbDb) return;
   var key = _lockKey(ordId);
-  var lock = { by: _deviceId, name: _deviceName, at: Date.now() };
+  var lockBy = (_currentUser ? _currentUser.key : _deviceId);
+  var lockName = (_currentUser ? _currentUser.nome : _deviceName);
+  var lock = { by: lockBy, name: lockName, at: Date.now() };
   _ordLocks[key] = lock;
   try{ _fbDb.ref('locks/' + key).set(lock); }catch(e){ console.error('ordLock err:', e); }
 }
@@ -425,7 +427,8 @@ function ordIsLockedByOther(ordId){
   var key = _lockKey(ordId);
   var lock = _ordLocks[key];
   if(!lock) return false;
-  if(lock.by === _deviceId) return false;
+  var myId = (_currentUser ? _currentUser.key : _deviceId);
+  if(lock.by === myId) return false;
   if(Date.now() - lock.at > LOCK_EXPIRE) return false;
   return lock;
 }
@@ -610,6 +613,7 @@ function _authPinKey(k){
       localStorage.setItem('cp4_lastUser', key);
       ov.style.display = 'none';
       _authApplyRole();
+      _authUpdateHeader();
       showToastGen('green','Benvenuto '+r.nome+'!');
     } else {
       // PIN errato
@@ -646,10 +650,23 @@ function _authSetupPin(key){
 }
 
 // Applica visibilità tab in base al ruolo
+function _authUpdateHeader(){
+  var el = document.getElementById('app-header-subtitle');
+  if(!el) return;
+  if(_currentUser){
+    el.textContent = _currentUser.nome;
+    el.style.color = (_currentUser.ruolo === 'proprietario') ? 'var(--accent)' : '#aaa';
+  } else {
+    el.textContent = 'Cartellini Prezzi';
+    el.style.color = '';
+  }
+}
+
 function _authApplyRole(){
   if(!_currentUser) return;
   var role = _roles[_currentUser.key];
   if(!role) return;
+  _authUpdateHeader();
   
   // Proprietario vede tutto
   if(role.tabs === '*') return;
