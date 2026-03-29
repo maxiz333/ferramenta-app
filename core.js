@@ -54,7 +54,7 @@ var ordiniArchivio=lsGet(ORDK_ARCH)||[];
   }
 })();
 
-var _fb=null,_fbDb=null,_fbReady=false,_fbSyncing=false;
+var _fb=null,_fbDb=null,_fbReady=false,_fbSyncing=false,_fbSyncingCart=false;
 
 // Ripara dati da Firebase (converte oggetti in array)
 function _fbFix(data){
@@ -76,7 +76,23 @@ function _fbFix(data){
 
 function _fbPush(ref,data){if(!_fbReady||_fbSyncing)return;try{_fbDb.ref(ref).set(data);}catch(e){}}
 
-function saveCarrelli(){ _takeSnapshot(); lsSet(CARTK,carrelli); updateCartBadge(); _fbPush('carrelli',carrelli); }
+function saveCarrelli(){
+  _takeSnapshot();
+  lsSet(CARTK, carrelli);
+  updateCartBadge();
+  // Su Firebase vanno SOLO i carrelli attivi (non inviati e non eliminati)
+  // I carrelli "inviato" restano solo in localStorage — su Firebase spariscono
+  // Questo è lo stesso comportamento degli ordini: una volta processato, esce dalla coda condivisa
+  var daCondividere = carrelli.filter(function(c){
+    return c.stato !== 'inviato';
+  });
+  if(_fbReady && _fbDb && !_fbSyncingCart){
+    try{
+      _fbDb.ref('carrelli').set(daCondividere.length ? daCondividere : null);
+      console.log('[CART] saveCarrelli — Firebase aggiornato, attivi:', daCondividere.length, 'totale locale:', carrelli.length);
+    }catch(e){ console.error('[CART] saveCarrelli Firebase FALLITO:', e); }
+  }
+}
 function saveOrdini(){ _takeSnapshot(); lsSet(ORDK,ordini); updateOrdBadge(); _fbPush('ordini',ordini); }
 
 
@@ -269,40 +285,35 @@ document.addEventListener('DOMContentLoaded', function(){
       setTimeout(function(){_fbSyncing=false;},500);
     });
     _fbDb.ref('carrelli').on('value',function(snap){
-      if(_fbSyncing)return;
-      var d=snap.val();if(!d)return;
-      var fresh=_fbFix(d);
-      if(JSON.stringify(fresh)===JSON.stringify(carrelli))return;
-      _fbSyncing=true;
-
-      // ── SYNC SELETTIVA: ogni account vede solo i propri carrelli ──────────
-      // Un carrello "appartiene" all'account che lo ha creato (campo commesso).
-      // Carrelli senza commesso (legacy) sono visibili a tutti.
-      // Questa logica evita che i carrelli di Banco 1 compaiano in Banco 2.
-      var myKey = (_currentUser ? _currentUser.key : null);
-      var myCarrelli = carrelli.filter(function(c){
-        // Tieni i carrelli miei o senza proprietario
-        return !c.commesso || c.commesso === myKey;
-      });
-      // Prendi da Firebase solo i carrelli che mi appartengono
-      var freshMiei = fresh.filter(function(c){
-        return !c.commesso || c.commesso === myKey;
-      });
-      console.log('[CART] sync Firebase — totale:', fresh.length, 'miei:', freshMiei.length, 'account:', myKey);
-
-      carrelli = freshMiei;
-      lsSet(CARTK, carrelli);
-      updateCartBadge();
-
-      // Fix activeCartId: se il carrello attivo non esiste più, prendi l'ultimo
-      if(activeCartId && !carrelli.find(function(c){ return c.id === activeCartId; })){
-        activeCartId = carrelli.length ? carrelli[carrelli.length-1].id : null;
-        console.log('[CART] activeCartId aggiornato a:', activeCartId);
-      }
-
-      var t=document.getElementById('tc');
-      if(t&&t.classList.contains('active')) renderCartTabs();
-      setTimeout(function(){_fbSyncing=false;},500);
+      // Flag SEPARATO: non interferisce con la sync degli ordini
+      if(_fbSyncingCart) return;
+      var d = snap.val();
+      // Firebase manda null se non ci sono carrelli attivi — normale
+      var fresh = d ? _fbFix(d) : [];
+      // Fonde i carrelli Firebase con quelli locali già inviati (che non sono su Firebase)
+      // Mantiene i carrelli "inviato" che ho già localmente — non li perde
+      var inviatiLocali = carrelli.filter(function(c){ return c.stato === 'inviato'; });
+      var merged = fresh.concat(inviatiLocali.filter(function(inv){
+        return !fresh.find(function(f){ return f.id === inv.id; });
+      }));
+      if(JSON.stringify(merged) === JSON.stringify(carrelli)) return;
+      _fbSyncingCart = true;
+      try{
+        console.log('[CART] sync Firebase — attivi:', fresh.length, 'inviati locali:', inviatiLocali.length);
+        carrelli = merged;
+        lsSet(CARTK, carrelli);
+        updateCartBadge();
+        // Se activeCartId non esiste più tra i carrelli attivi, prendi l'ultimo attivo
+        var cartAttivoEsiste = carrelli.find(function(c){ return c.id === activeCartId && c.stato !== 'inviato'; });
+        if(!cartAttivoEsiste){
+          var attivi = carrelli.filter(function(c){ return c.stato !== 'inviato'; });
+          activeCartId = attivi.length ? attivi[attivi.length-1].id : (carrelli.length ? carrelli[carrelli.length-1].id : null);
+          console.log('[CART] activeCartId corretto a:', activeCartId);
+        }
+        var t = document.getElementById('tc');
+        if(t && t.classList.contains('active')) renderCartTabs();
+      }catch(e){ console.error('[CART] sync Firebase errore:', e); }
+      setTimeout(function(){ _fbSyncingCart = false; }, 300);
     });
 
     // ── Avvia caricamento catalogo IMMEDIATAMENTE all'apertura ──
