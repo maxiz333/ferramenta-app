@@ -111,14 +111,14 @@ var _editOrdItems=null;
 
 function modificaOrdineDaTab(gi){
   var ord=ordini[gi];
-  if(!ord)return;
-  // Controlla se un altro account ha il lock su questo ordine
+  if(!ord){ console.error('[LOCK] modificaOrdineDaTab — ordine non trovato a indice:', gi); return; }
   var lockInfo = ordIsLockedByOther(ord.id);
   if(lockInfo){
+    console.warn('[LOCK] modificaOrdineDaTab BLOCCATA — ordine:', ord.id, 'bloccato da:', lockInfo.by, '(', lockInfo.name, ')');
     showToastGen('orange','🔒 ' + (lockInfo.name||'Altro account') + ' sta modificando questo ordine');
     return;
   }
-  // Acquisisce il lock: segnala agli altri che stiamo lavorando
+  console.log('[LOCK] modificaOrdineDaTab — acquisisco lock su ordine:', ord.id);
   ordLock(ord.id);
   _editOrdIdx=gi;
   _editOrdItems=JSON.parse(JSON.stringify(ord.items));
@@ -198,22 +198,27 @@ function _editOrdSconto(idx,val){
   renderEditOrdine();
 }
 function salvaEditOrdine(){
-  var ord=ordini[_editOrdIdx];if(!ord)return;
+  var ord=ordini[_editOrdIdx];
+  if(!ord){ console.error('[LOCK] salvaEditOrdine — nessun ordine a indice:', _editOrdIdx); return; }
   ord.items=JSON.parse(JSON.stringify(_editOrdItems));
   var tot=_editOrdItems.reduce(function(s,it){return s+(_prezzoEffettivo(it)*parseFloat(it.qty||0));},0);
   ord.totale=tot.toFixed(2);
   ord.modificato=true;ord.modificatoAt=new Date().toLocaleString('it-IT');ord.modificatoAtISO=new Date().toISOString();
   saveOrdini();
   var linkedCart=carrelli.find(function(c){return c.ordId===ord.id;});
-  if(linkedCart){linkedCart.items=JSON.parse(JSON.stringify(_editOrdItems));saveCarrelli();}
-  // Rilascia il lock dopo il salvataggio
+  if(linkedCart){
+    console.log('[LOCK] salvaEditOrdine — sync prezzi su carrello collegato:', linkedCart.id);
+    linkedCart.items=JSON.parse(JSON.stringify(_editOrdItems));
+    saveCarrelli();
+  }
+  console.log('[LOCK] salvaEditOrdine — rilascio lock su ordine:', ord.id);
   ordUnlock(ord.id);
   chiudiEditOrdine();feedbackSend();renderOrdini();
   showToastGen('purple','✅ Ordine #'+(ord.numero||'')+' aggiornato!');
 }
 function chiudiEditOrdine(){
-  // Rilascia il lock anche se si chiude senza salvare
   if(_editOrdIdx !== null && ordini[_editOrdIdx]){
+    console.log('[LOCK] chiudiEditOrdine — rilascio lock su ordine:', ordini[_editOrdIdx].id);
     ordUnlock(ordini[_editOrdIdx].id);
   }
   document.getElementById('edit-ord-overlay').style.display='none';
@@ -350,10 +355,18 @@ function filterOrdini(f){
 }
 function setStatoOrdine(gi,stato){
   var o=ordini[gi];if(!o)return;
-  // Lock collaborativo: blocca ordine mentre ci lavori
+  console.log('[LOCK] setStatoOrdine — ordine:', o.id, 'nuovo stato:', stato);
+  var lockInfo = ordIsLockedByOther(o.id);
+  if(lockInfo){
+    console.warn('[LOCK] setStatoOrdine — ordine bloccato da:', lockInfo.name, '— cambio stato bloccato');
+    showToastGen('orange','🔒 ' + (lockInfo.name||'Altro account') + ' sta lavorando su questo ordine');
+    return;
+  }
   ordLock(o.id);
-  // Rilascia lock se completato
-  if(stato==='completato') ordUnlock(o.id);
+  if(stato==='completato'){
+    console.log('[LOCK] setStatoOrdine — completato, rilascio lock');
+    ordUnlock(o.id);
+  }
   o.stato=stato;
   if(!o.statiLog)o.statiLog={};
   o.statiLog[stato]={ora:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),data:new Date().toLocaleDateString('it-IT')};
@@ -2480,16 +2493,17 @@ function cancelEditProdotto(){
 // ── LOCK COLLABORATIVO — forza accesso con triplo tap ────────────
 function ordForceLock(ordId, gi){
   var ord = ordini[gi];
-  if(!ord) return;
-  var key = String(ordId).replace(/[.#$\/\[\]]/g, '_');
+  if(!ord){ console.error('[LOCK] ordForceLock — ordine non trovato a indice:', gi); return; }
+  var key = _lockKey(ordId);
   var currentLock = _ordLocks[key];
   var holderName = currentLock ? (currentLock.name || 'altro account') : 'altro account';
-  // Richiede conferma prima di forzare (evita sblocchi accidentali)
+  console.warn('[LOCK] ordForceLock — tentativo sblocco forzato su:', ordId, 'da:', holderName);
   if(!confirm('⚠️ Sblocco forzato\n\n' + holderName + ' sta lavorando su questo ordine.\n\nVuoi forzare l\'accesso?')){
+    console.log('[LOCK] ordForceLock — annullato dall\'utente');
     return;
   }
+  console.warn('[LOCK] ordForceLock — CONFERMATO, prendo il lock su:', ordId);
   ordLock(ordId);
-  // Scrive nota di log visibile nel badge MODIFICATO (viola)
   var chi = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.nome : 'Sconosciuto';
   var ora = new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
   if(!ord.modificheDiff) ord.modificheDiff = [];

@@ -409,22 +409,33 @@ var _deviceName = localStorage.getItem('cp4_deviceName') || _deviceId;
 function _lockKey(ordId){ return String(ordId).replace(/[.#$/\[\]]/g, '_'); }
 
 function ordLock(ordId){
-  if(!_fbReady || !_fbDb) return;
+  if(!_fbReady || !_fbDb){
+    console.error('[LOCK] ordLock FALLITO — Firebase non pronto. ordId:', ordId, '_fbReady:', _fbReady, '_fbDb:', !!_fbDb);
+    return;
+  }
+  if(!_currentUser){
+    console.warn('[LOCK] ordLock chiamato senza utente loggato — uso deviceId come fallback. ordId:', ordId);
+  }
   var key = _lockKey(ordId);
   var lockBy = (_currentUser ? _currentUser.key : _deviceId);
   var lockName = (_currentUser ? _currentUser.nome : _deviceName);
   var lock = { by: lockBy, name: lockName, at: Date.now() };
   _ordLocks[key] = lock;
-  try{ _fbDb.ref('locks/' + key).set(lock); }catch(e){ console.error('ordLock err:', e); }
-  // Aggiorna anche il nodo accountBusy (lock per-account: segnala che questo account è occupato)
+  console.log('[LOCK] ordLock OK — ordId:', ordId, 'key:', key, 'by:', lockBy, 'name:', lockName);
+  try{ _fbDb.ref('locks/' + key).set(lock); }catch(e){ console.error('[LOCK] Firebase write FALLITO:', e); }
+  // Aggiorna anche il nodo accountBusy (lock per-account)
   _accountBusySet(ordId);
 }
 
 function ordUnlock(ordId){
   var key = _lockKey(ordId);
+  console.log('[LOCK] ordUnlock — ordId:', ordId, 'key:', key);
   delete _ordLocks[key];
-  if(_fbReady && _fbDb) try{ _fbDb.ref('locks/' + key).remove(); }catch(e){}
-  // Rilascia anche il lock per-account
+  if(_fbReady && _fbDb){
+    try{ _fbDb.ref('locks/' + key).remove(); }catch(e){ console.error('[LOCK] ordUnlock Firebase remove FALLITO:', e); }
+  } else {
+    console.warn('[LOCK] ordUnlock — Firebase non pronto, lock rimosso solo localmente');
+  }
   _accountBusyClear();
 }
 
@@ -433,21 +444,28 @@ function ordUnlock(ordId){
 var _myAccountBusyOrdId = null; // traccia l'ordine su cui siamo occupati
 
 function _accountBusySet(ordId){
-  if(!_fbReady || !_fbDb || !_currentUser) return;
+  if(!_fbReady || !_fbDb) return;
   _myAccountBusyOrdId = ordId;
+  // Usa _currentUser se loggato, altrimenti deviceId come chiave
+  var busyKey = _currentUser ? _currentUser.key : _deviceId;
   var data = {
     ordId: ordId,
-    name: _currentUser.nome,
-    ruolo: _currentUser.ruolo,
+    name: _currentUser ? _currentUser.nome : _deviceName,
+    ruolo: _currentUser ? _currentUser.ruolo : 'sconosciuto',
     at: Date.now()
   };
-  try{ _fbDb.ref('accountBusy/' + _currentUser.key).set(data); }catch(e){}
+  console.log('[LOCK] _accountBusySet — account:', busyKey, 'occupato su ordine:', ordId);
+  try{ _fbDb.ref('accountBusy/' + busyKey).set(data); }catch(e){ console.error('[LOCK] accountBusy write FALLITO:', e); }
 }
+
+
 
 function _accountBusyClear(){
   _myAccountBusyOrdId = null;
-  if(!_fbReady || !_fbDb || !_currentUser) return;
-  try{ _fbDb.ref('accountBusy/' + _currentUser.key).remove(); }catch(e){}
+  if(!_fbReady || !_fbDb) return;
+  var busyKey = _currentUser ? _currentUser.key : _deviceId;
+  console.log('[LOCK] _accountBusyClear — rimuovo accountBusy per:', busyKey);
+  try{ _fbDb.ref('accountBusy/' + busyKey).remove(); }catch(e){ console.error('[LOCK] accountBusy remove FALLITO:', e); }
 }
 
 // Restituisce info su account occupati (esclude il proprio)
@@ -481,23 +499,39 @@ function getAccountBusyWarning(ordId){
 function ordIsLockedByOther(ordId){
   var key = _lockKey(ordId);
   var lock = _ordLocks[key];
-  if(!lock) return false;
+  if(!lock){
+    // nessun lock su questo ordine — normale, non loggo per non spammare
+    return false;
+  }
   var myId = (_currentUser ? _currentUser.key : _deviceId);
-  if(lock.by === myId) return false;
-  if(Date.now() - lock.at > LOCK_EXPIRE) return false;
+  if(lock.by === myId){
+    console.log('[LOCK] ordIsLockedByOther — lock mio, ignoro. ordId:', ordId, 'myId:', myId);
+    return false;
+  }
+  var eta = Date.now() - lock.at;
+  if(eta > LOCK_EXPIRE){
+    console.warn('[LOCK] ordIsLockedByOther — lock SCADUTO (' + Math.round(eta/1000) + 's), ignoro. ordId:', ordId);
+    return false;
+  }
+  console.log('[LOCK] ordIsLockedByOther — BLOCCATO da:', lock.by, '(', lock.name, ') su ordId:', ordId);
   return lock;
 }
 
 function _initLockListener(){
-  if(!_fbReady || !_fbDb) return;
+  if(!_fbReady || !_fbDb){
+    console.error('[LOCK] _initLockListener — Firebase non pronto');
+    return;
+  }
+  console.log('[LOCK] _initLockListener — listener attivato su Firebase locks/');
   _fbDb.ref('locks').on('value', function(snap){
     var d = snap.val();
     _ordLocks = d || {};
-    // NON re-renderizzare se c'è un editing inline attivo
+    var nLocks = Object.keys(_ordLocks).length;
+    console.log('[LOCK] aggiornamento locks ricevuto — lock attivi:', nLocks, _ordLocks);
     if(document.querySelector('.ord-inline-input')) return;
     var t = document.getElementById('to');
     if(t && t.classList.contains('active')){
-      try{ renderOrdini(); }catch(e){}
+      try{ renderOrdini(); }catch(e){ console.error('[LOCK] renderOrdini dopo lock update FALLITO:', e); }
     }
   });
 }

@@ -152,11 +152,14 @@ function confirmNewCart(){
   if(!sconto&&savedSconto)sconto=savedSconto;
   if(nome&&sconto)setClienteSconto(nome,sconto);
   var id='cart_'+Date.now();
+  var _commId = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.key : '';
+  console.log('[CART] Nuovo carrello — commesso:', _commId || '(nessun login)');
   carrelli.push({id:id,nome:nome||('Cliente '+(carrelli.length+1)),
     createdAt:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),
     dataCreazione:Date.now(),
     creatoAtISO:new Date().toISOString(),
     items:[],
+    commesso: _commId,
     scontoGlobale:sconto||null});
   activeCartId=id;
   saveCarrelli();
@@ -1932,12 +1935,14 @@ function avvisaUfficio(cartId){
     nota:cart.nota||'',
     totale:'0',
     stato:'bozza',
-    commesso:cart.commesso||''
+    commesso: (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.key : (cart.commesso||'')
   };
   ordini.unshift(bozza);
-  // Acquisisce il lock sulla bozza: il Banco è il proprietario finché non invia l'ordine vero
-  ordLock(bozzaId);
   saveOrdini();
+  // Lock DOPO saveOrdini: la bozza deve già esistere su Firebase prima di scrivere il lock
+  // altrimenti l'altro device riceve il lock ma non trova ancora la bozza nell'array
+  console.log('[LOCK] avvisaUfficio — acquisisco lock su bozza:', bozzaId);
+  ordLock(bozzaId);
   cart.bozzaOrdId=bozzaId;
   saveCarrelli();
   renderCartTabs();
