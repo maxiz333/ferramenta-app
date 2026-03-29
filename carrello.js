@@ -1935,6 +1935,8 @@ function avvisaUfficio(cartId){
     commesso:cart.commesso||''
   };
   ordini.unshift(bozza);
+  // Acquisisce il lock sulla bozza: il Banco è il proprietario finché non invia l'ordine vero
+  ordLock(bozzaId);
   saveOrdini();
   cart.bozzaOrdId=bozzaId;
   saveCarrelli();
@@ -1956,6 +1958,8 @@ function _aggiornaBozzaOrdine(cart){
 // Elimina la bozza collegata (chiamata quando si invia l'ordine vero)
 function _rimuoviBozzaOrdine(cart){
   if(!cart||!cart.bozzaOrdId)return;
+  // Rilascia il lock sulla bozza prima di eliminarla
+  ordUnlock(cart.bozzaOrdId);
   ordini=ordini.filter(function(o){return o.id!==cart.bozzaOrdId;});
   delete cart.bozzaOrdId;
 }

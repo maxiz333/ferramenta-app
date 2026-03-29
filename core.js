@@ -236,6 +236,7 @@ document.addEventListener('DOMContentLoaded', function(){
     _fbDb=firebase.database();
     _fbReady=true;
     _initLockListener();
+    _initAccountBusyListener();
     // Snapshot degli ID gi- presenti PRIMA di connettersi - cos- al primo sync non scattano notifiche
     var _idKnown={};
     ordini.forEach(function(o){if(o&&o.id)_idKnown[o.id]=true;});
@@ -415,12 +416,66 @@ function ordLock(ordId){
   var lock = { by: lockBy, name: lockName, at: Date.now() };
   _ordLocks[key] = lock;
   try{ _fbDb.ref('locks/' + key).set(lock); }catch(e){ console.error('ordLock err:', e); }
+  // Aggiorna anche il nodo accountBusy (lock per-account: segnala che questo account è occupato)
+  _accountBusySet(ordId);
 }
 
 function ordUnlock(ordId){
   var key = _lockKey(ordId);
   delete _ordLocks[key];
   if(_fbReady && _fbDb) try{ _fbDb.ref('locks/' + key).remove(); }catch(e){}
+  // Rilascia anche il lock per-account
+  _accountBusyClear();
+}
+
+// ── LOCK PER-ACCOUNT: segnala su Firebase che questo account è occupato ──────
+// Struttura Firebase: accountBusy/{accountKey} = { ordId, name, at }
+var _myAccountBusyOrdId = null; // traccia l'ordine su cui siamo occupati
+
+function _accountBusySet(ordId){
+  if(!_fbReady || !_fbDb || !_currentUser) return;
+  _myAccountBusyOrdId = ordId;
+  var data = {
+    ordId: ordId,
+    name: _currentUser.nome,
+    ruolo: _currentUser.ruolo,
+    at: Date.now()
+  };
+  try{ _fbDb.ref('accountBusy/' + _currentUser.key).set(data); }catch(e){}
+}
+
+function _accountBusyClear(){
+  _myAccountBusyOrdId = null;
+  if(!_fbReady || !_fbDb || !_currentUser) return;
+  try{ _fbDb.ref('accountBusy/' + _currentUser.key).remove(); }catch(e){}
+}
+
+// Restituisce info su account occupati (esclude il proprio)
+// Ritorna array di { key, name, ordId } oppure [] se nessuno occupato
+var _accountBusyMap = {};
+
+function _initAccountBusyListener(){
+  if(!_fbReady || !_fbDb) return;
+  _fbDb.ref('accountBusy').on('value', function(snap){
+    _accountBusyMap = snap.val() || {};
+  });
+}
+
+// Ritorna stringa "⚠️ Banco 1 è occupato su Ordine #X" se l'ordine è in lavorazione da un altro account
+// Usato nell'UI per mostrare avvisi contestuali (non blocca, solo informa)
+function getAccountBusyWarning(ordId){
+  var myKey = _currentUser ? _currentUser.key : null;
+  var warnings = [];
+  Object.keys(_accountBusyMap).forEach(function(k){
+    if(k === myKey) return; // ignora se stesso
+    var b = _accountBusyMap[k];
+    if(!b) return;
+    // Avvisa solo se è sullo stesso ordine O se vuoi vedere tutti gli occupati
+    if(b.ordId === ordId){
+      warnings.push('⚠️ ' + (b.name || k) + ' sta lavorando su questo ordine');
+    }
+  });
+  return warnings.join(' · ');
 }
 
 function ordIsLockedByOther(ordId){
@@ -448,7 +503,17 @@ function _initLockListener(){
 }
 
 
-// ══ ACCOUNT / RUOLI CON PIN ═════════════════════════════════════
+// ── Cleanup automatico lock alla chiusura della pagina ───────────────────────
+// Se l'utente chiude il browser o cambia pagina, rilascia lock e accountBusy
+window.addEventListener('beforeunload', function(){
+  _accountBusyClear();
+  // Rilascia tutti i lock acquisiti da questo account
+  if(_fbReady && _fbDb && _currentUser){
+    try{ _fbDb.ref('accountBusy/' + _currentUser.key).remove(); }catch(e){}
+  }
+});
+
+
 var AUTH_K = 'cp4_auth';
 var _currentUser = null;
 
