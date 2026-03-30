@@ -346,6 +346,20 @@ function mostraBozzaAggiornata(bozza){
   var nArt = (bozza.items||[]).length;
   showToastGen('blue', '📡 ' + nome + ' — bozza aggiornata (' + nArt + ' art.)');
 
+  // Blip sonoro discreto — un singolo "blop" corto e basso
+  try {
+    var ctx = new (window.AudioContext||window.webkitAudioContext)();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 520;
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.03);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.12);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.15);
+  } catch(e){}
+
   // Flash + mini-banner sulla card della bozza se visibile nella tab ordini
   var toTab = document.getElementById('to');
   if(toTab && toTab.classList.contains('active')){
