@@ -340,6 +340,41 @@ document.addEventListener('click', function(e){
   if(bd && e.target === bd) closeBozzaModal();
 });
 
+// ── Notifica aggiornamento bozza (piccola, in-app) ──────────────────────
+function mostraBozzaAggiornata(bozza){
+  var nome = bozza.nomeCliente || 'Banco';
+  var nArt = (bozza.items||[]).length;
+  showToastGen('blue', '📡 ' + nome + ' — bozza aggiornata (' + nArt + ' art.)');
+
+  // Flash + mini-banner sulla card della bozza se visibile nella tab ordini
+  var toTab = document.getElementById('to');
+  if(toTab && toTab.classList.contains('active')){
+    var card = document.querySelector('.ord-card--bozza[data-bozza-id="'+bozza.id+'"]');
+    if(card){
+      // Flash bordo blu
+      card.style.transition = 'box-shadow .3s, border-color .3s';
+      card.style.boxShadow = '0 0 20px #3182ce88';
+      card.style.borderColor = '#3182ce';
+      setTimeout(function(){ card.style.boxShadow = ''; card.style.borderColor = ''; }, 3000);
+
+      // Mini-banner animato in cima alla card
+      var oldBanner = card.querySelector('.bozza-update-banner');
+      if(oldBanner) oldBanner.remove();
+      var banner = document.createElement('div');
+      banner.className = 'bozza-update-banner';
+      banner.innerHTML = '⚡ Aggiornato ora — ' + nArt + ' articol' + (nArt===1?'o':'i');
+      card.insertBefore(banner, card.firstChild);
+
+      // Sparisce dopo 4 secondi
+      setTimeout(function(){
+        banner.style.opacity = '0';
+        banner.style.transform = 'translateY(-100%)';
+        setTimeout(function(){ if(banner.parentNode) banner.remove(); }, 300);
+      }, 4000);
+    }
+  }
+}
+
 // Ascolta quando la tab torna in focus
 document.addEventListener('visibilitychange', function(){
   if(!document.hidden && _pendingOrdineModal){

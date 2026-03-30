@@ -397,6 +397,23 @@ body.light-mode #fatture-popup button { color: #444; }
 #bozza-modal-body { padding:16px 20px 8px; max-height:55vh; overflow-y:auto; }
 #bozza-modal-footer { padding:12px 20px 18px; display:flex; gap:10px; }
 
+/* ─── Banner aggiornamento bozza in-card ─── */
+.bozza-update-banner {
+  background: linear-gradient(90deg, #3182ce22, #3182ce44, #3182ce22);
+  color: #90cdf4;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid #3182ce44;
+  animation: bozzaPulse .6s ease-in-out 2;
+  transition: opacity .3s, transform .3s;
+}
+@keyframes bozzaPulse {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: #3182ce33; }
+}
+
 /* ─── Lista Ordini ─── */
 .ord-act-btn{padding:5px 13px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid;background:transparent;cursor:pointer;font-family:inherit;}
 

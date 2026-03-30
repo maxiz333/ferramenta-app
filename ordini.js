@@ -736,7 +736,7 @@ function renderOrdini(){
       var nArt=(ord.items||[]).length;
       var tot=0;
       (ord.items||[]).forEach(function(it){tot+=parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0);});
-      h+='<div class="ord-card ord-card--bozza" style="position:relative;">';
+      h+='<div class="ord-card ord-card--bozza" data-bozza-id="'+ord.id+'" style="position:relative;">';
       // Banner pulsante
       h+='<div class="ord-card-stato ord-card-stato--bozza">';
       h+='📡 🔨 ⚡';
@@ -1133,6 +1133,16 @@ function startAutoRefresh(){
       var toTab=document.getElementById('to');
       if(toTab&&toTab.classList.contains('active')){
         renderOrdini();
+        // Rileva bozze aggiornate (stessa quantità ma contenuto diverso)
+        var freshBozzeIds=fresh.filter(function(o){return o.stato==='bozza';}).map(function(o){return o.id;});
+        var prevBozzeMap={};
+        prev.filter(function(o){return o.stato==='bozza';}).forEach(function(o){prevBozzeMap[o.id]=JSON.stringify(o);});
+        freshBozzeIds.forEach(function(bid){
+          var fb=fresh.find(function(o){return o.id===bid;});
+          if(fb && prevBozzeMap[bid] && prevBozzeMap[bid]!==JSON.stringify(fb)){
+            if(typeof mostraBozzaAggiornata === 'function') mostraBozzaAggiornata(fb);
+          }
+        });
       } else {
         // Tab non attiva: badge e notifica gestiti da _updateBozzaBadge()
         var nuoveBozze=fresh.filter(function(o){return o.stato==='bozza';}).length;

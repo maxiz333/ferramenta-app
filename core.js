@@ -256,7 +256,8 @@ document.addEventListener('DOMContentLoaded', function(){
     // Snapshot degli ID gi- presenti PRIMA di connettersi - cos- al primo sync non scattano notifiche
     var _idKnown={};
     var _bozzaKnown={};
-    ordini.forEach(function(o){if(o&&o.id){_idKnown[o.id]=true; if(o.stato==='bozza') _bozzaKnown[o.id]=true;}});
+    var _bozzaSnap={}; // snapshot JSON delle bozze per rilevare aggiornamenti
+    ordini.forEach(function(o){if(o&&o.id){_idKnown[o.id]=true; if(o.stato==='bozza'){_bozzaKnown[o.id]=true; _bozzaSnap[o.id]=JSON.stringify(o);}}});
     var _first=true;
     _fbDb.ref('ordini').on('value',function(snap){
       if(_fbSyncing)return;
@@ -264,7 +265,7 @@ document.addEventListener('DOMContentLoaded', function(){
       var fresh=_fbFix(d);
       // Aggiorna sempre _idKnown al primo sync (prima di confrontare)
       if(_first){
-        fresh.forEach(function(o){if(o&&o.id){_idKnown[o.id]=true; if(o.stato==='bozza') _bozzaKnown[o.id]=true;}});
+        fresh.forEach(function(o){if(o&&o.id){_idKnown[o.id]=true; if(o.stato==='bozza'){_bozzaKnown[o.id]=true; _bozzaSnap[o.id]=JSON.stringify(o);}}});
         _first=false;
       }
       if(JSON.stringify(fresh)===JSON.stringify(ordini))return;
@@ -285,11 +286,22 @@ document.addEventListener('DOMContentLoaded', function(){
         // Bozze nuove — notifica browser + modal (come per gli ordini normali)
         var nuoveBozze=fresh.filter(function(o){return o.stato==='bozza'&&!_bozzaKnown[o.id];});
         if(nuoveBozze.length){
-          nuoveBozze.forEach(function(o){_bozzaKnown[o.id]=true;});
+          nuoveBozze.forEach(function(o){_bozzaKnown[o.id]=true; _bozzaSnap[o.id]=JSON.stringify(o);});
           if(typeof mostraNotificaBozza === 'function'){
             mostraNotificaBozza(nuoveBozze[nuoveBozze.length-1]);
           }
         }
+        // Bozze aggiornate — toast in-app per chi sta nella tab ordini
+        fresh.forEach(function(o){
+          if(o.stato==='bozza' && _bozzaKnown[o.id]){
+            var newSnap=JSON.stringify(o);
+            if(_bozzaSnap[o.id] && _bozzaSnap[o.id]!==newSnap){
+              _bozzaSnap[o.id]=newSnap;
+              if(typeof mostraBozzaAggiornata === 'function') mostraBozzaAggiornata(o);
+            }
+            _bozzaSnap[o.id]=newSnap;
+          }
+        });
       }catch(e){console.error('FB ordini:',e);}
       setTimeout(function(){_fbSyncing=false;},500);
     });
