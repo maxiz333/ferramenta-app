@@ -729,11 +729,12 @@ function _authPinKey(k){
     var key = ov._authKey;
     var r = _roles[key];
     if(_authPinBuffer === r.pin){
-      // Login OK
+      // Login OK — salva sessione per auto-login al refresh
       _currentUser = { key:key, nome:r.nome, ruolo:r.ruolo };
       _deviceName = r.nome;
       localStorage.setItem('cp4_deviceName', r.nome);
       localStorage.setItem('cp4_lastUser', key);
+      _authSaveSession(key);
       ov.style.display = 'none';
       _authApplyRole();
       _authUpdateHeader();
@@ -822,14 +823,51 @@ function _authApplyRole(){
   if(themeBtn) themeBtn.style.display = '';
 }
 
-// Auto-login se ultimo utente salvato
+// Auto-login se sessione attiva salvata
+var _AUTH_SESSION_K = 'cp4_auth_session';
+
 function _authInit(){
   _authLoad();
-  var last = localStorage.getItem('cp4_lastUser');
-  if(last && _roles[last] && _roles[last].pin){
-    // Mostra login con ultimo utente pre-selezionato
-    _authShowLogin();
-  } else {
-    _authShowLogin();
+
+  // Controlla se c'è una sessione attiva salvata
+  var session = lsGet(_AUTH_SESSION_K, null);
+  if(session && session.key && _roles[session.key] && _roles[session.key].pin){
+    // Auto-login — salta la schermata PIN
+    _currentUser = { key: session.key, nome: _roles[session.key].nome, ruolo: _roles[session.key].ruolo };
+    _deviceName = _currentUser.nome;
+    localStorage.setItem('cp4_deviceName', _currentUser.nome);
+    _authApplyRole();
+    _authUpdateHeader();
+    // Nascondi overlay login se presente
+    var ov = document.getElementById('auth-login-ov');
+    if(ov) ov.style.display = 'none';
+    return;
   }
+
+  // Nessuna sessione — mostra login
+  _authShowLogin();
+}
+
+function _authSaveSession(key){
+  lsSet(_AUTH_SESSION_K, { key: key, at: new Date().toISOString() });
+}
+
+function _authClearSession(){
+  localStorage.removeItem(_AUTH_SESSION_K);
+}
+
+function authLogout(){
+  _authClearSession();
+  _currentUser = null;
+  _authUpdateHeader();
+  // Ripristina visibilità di tutte le tab (reset permessi)
+  var allBottom = document.querySelectorAll('.tab-bottom-btn');
+  allBottom.forEach(function(btn){ btn.style.display = ''; });
+  var allAltro = document.querySelectorAll('.altro-btn');
+  allAltro.forEach(function(btn){ btn.style.display = ''; });
+  // Chiudi menu Altro se aperto
+  if(typeof closeAltroMenu === 'function') closeAltroMenu();
+  // Mostra login
+  _authShowLogin();
+  showToastGen('blue','👋 Disconnesso');
 }
