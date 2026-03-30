@@ -137,12 +137,8 @@ select{padding:3px 4px;border:1px solid var(--border);border-radius:3px;font-siz
   .search-box{max-width:100%;}
 }
 @media print{
-  /* @page con margin:0 rimuove nome file, URL e numero pagina che il browser aggiunge */
-  @page{
-    size:A4 portrait;
-    margin:0;         /* ← elimina header/footer del browser (nome file, URL, data) */
-  }
-  body{background:white;padding:4mm;} /* padding qui invece che in @page */
+  @page{size:A4 portrait;margin:4mm;}
+  body{background:white;padding:0;}
   body > *{display:none!important;}
   #print-area{display:block!important;padding:0;width:100%;}
   /* Cartellini: se l'anteprima overlay (#pov) è aperta, stampa da lì */
@@ -153,23 +149,6 @@ select{padding:3px 4px;border:1px solid var(--border);border-radius:3px;font-siz
   .tag-row{page-break-inside:avoid;}
   .tag-row+.tag-row{border-top:.4px dashed #999;}
   .tag-small+.tag-small,.tag-large+.tag-large{border-left:.4px dashed #999;}
-
-  /* FIX COLORI STAMPA — forza il browser a stampare i colori di sfondo */
-  /* Senza questo, il banner PROMO perde il colore rosso in stampa su desktop */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
-  }
-
-  /* FIX PROMO — pseudo-elemento con colore di sfondo esplicito */
-  .tag-small.cp::before,
-  .tag-large.cp::before {
-    background: var(--promo-color, #dc2626) !important;
-    color: #fff !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
 }
 /* NOTE CARD */
 .note-card{background:#1e1e1e;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;transition:border-color .2s;}
@@ -395,6 +374,29 @@ body.light-mode #fatture-popup button { color: #444; }
   padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;
 }
 .ordine-riga:last-child{border-bottom:none;}
+
+/* ─── Modal Bozza (stile blu) ─── */
+#bozza-modal-backdrop {
+  position:fixed;inset:0;z-index:2000;
+  background:rgba(0,0,0,.7);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+}
+#bozza-modal-backdrop.open { opacity:1;pointer-events:all; }
+#bozza-modal {
+  background:var(--card);border-radius:18px;width:min(420px,92vw);
+  box-shadow:0 12px 60px rgba(0,0,0,.8);overflow:hidden;
+  transform:scale(.92) translateY(10px);transition:transform .2s;
+}
+#bozza-modal-backdrop.open #bozza-modal { transform:scale(1) translateY(0); }
+#bozza-modal-header {
+  background:linear-gradient(135deg,#0d1a2a,#1a3a5a);
+  padding:18px 20px 14px;
+  border-bottom:2px solid #3182ce;
+}
+#bozza-modal-body { padding:16px 20px 8px; max-height:55vh; overflow-y:auto; }
+#bozza-modal-footer { padding:12px 20px 18px; display:flex; gap:10px; }
+
 /* ─── Lista Ordini ─── */
 .ord-act-btn{padding:5px 13px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid;background:transparent;cursor:pointer;font-family:inherit;}
 

@@ -247,12 +247,110 @@ function mostraNotificaOrdine(ord){
   }
 }
 
+// ── Notifica Bozza (stessa struttura di mostraNotificaOrdine, stile blu) ──
+var _pendingBozzaModal = null;
+
+function mostraNotificaBozza(bozza){
+  // -- 1. Notifica di sistema (browser) -----------------------------------
+  if(_notifPermesso && 'Notification' in window && Notification.permission === 'granted'){
+    var righeText = (bozza.items||[]).map(function(it){
+      return it.qty + ' × ' + it.desc;
+    }).join('\n');
+    try {
+      var notif = new Notification('📡 Bozza in costruzione — ' + (bozza.nomeCliente||'Cliente'), {
+        body: righeText + (bozza.nota ? '\n📝 ' + bozza.nota : '') + '\n\nIl banco sta preparando l\'ordine',
+        tag:  'bozza_' + bozza.id,
+        requireInteraction: true
+      });
+      notif.onclick = function(){
+        window.focus();
+        goTab('to');
+        if(typeof filterOrdini === 'function') filterOrdini('bozza');
+        notif.close();
+      };
+    } catch(e){ console.warn('Notifica bozza fallita:', e); }
+  }
+
+  // -- 2. Modal in-app (sempre) -------------------------------------------
+  if(document.hidden){
+    _pendingBozzaModal = bozza;
+  } else {
+    _apriBozzaModal(bozza);
+  }
+}
+
+function _apriBozzaModal(bozza){
+  var bd = document.getElementById('bozza-modal-backdrop');
+  if(!bd) return;
+
+  document.getElementById('bmd-cliente').textContent = bozza.nomeCliente || 'Cliente';
+  document.getElementById('bmd-ora').textContent = bozza.data + ' — ' + bozza.ora;
+
+  var righeEl = document.getElementById('bmd-righe');
+  righeEl.innerHTML = (bozza.items||[]).map(function(it){
+    return '<div class="ordine-riga">' +
+      '<span style="color:var(--text);font-weight:600;">' +
+        '<span style="color:#63b3ed;font-size:14px;font-weight:900;">' + it.qty + '</span>' +
+        ' × ' + (it.desc||'—') +
+      '</span>' +
+    '</div>';
+  }).join('');
+
+  var notaEl = document.getElementById('bmd-nota');
+  if(bozza.nota && bozza.nota.trim()){
+    notaEl.textContent = '📝 ' + bozza.nota;
+    notaEl.style.display = '';
+  } else {
+    notaEl.style.display = 'none';
+  }
+
+  bd.classList.add('open');
+
+  // Suono — tono più basso e dolce rispetto all'ordine
+  try {
+    var ctx = new (window.AudioContext||window.webkitAudioContext)();
+    [0,200].forEach(function(delay){
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 660;
+      gain.gain.setValueAtTime(0, ctx.currentTime + delay/1000);
+      gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + delay/1000 + 0.04);
+      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + delay/1000 + 0.25);
+      osc.start(ctx.currentTime + delay/1000);
+      osc.stop(ctx.currentTime + delay/1000 + 0.3);
+    });
+  } catch(e){}
+}
+
+function closeBozzaModal(){
+  var bd = document.getElementById('bozza-modal-backdrop');
+  if(bd) bd.classList.remove('open');
+}
+
+function bozzaModalVaiOrdini(){
+  closeBozzaModal();
+  goTab('to');
+  if(typeof filterOrdini === 'function') filterOrdini('bozza');
+}
+
+// Chiudi bozza modal cliccando fuori
+document.addEventListener('click', function(e){
+  var bd = document.getElementById('bozza-modal-backdrop');
+  if(bd && e.target === bd) closeBozzaModal();
+});
+
 // Ascolta quando la tab torna in focus
 document.addEventListener('visibilitychange', function(){
   if(!document.hidden && _pendingOrdineModal){
     var ord = _pendingOrdineModal;
     _pendingOrdineModal = null;
     setTimeout(function(){ _apriOrdineModal(ord); }, 300);
+  }
+  if(!document.hidden && _pendingBozzaModal){
+    var bozza = _pendingBozzaModal;
+    _pendingBozzaModal = null;
+    setTimeout(function(){ _apriBozzaModal(bozza); }, 400);
   }
 });
 

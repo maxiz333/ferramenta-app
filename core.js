@@ -255,7 +255,8 @@ document.addEventListener('DOMContentLoaded', function(){
     _initAccountBusyListener();
     // Snapshot degli ID gi- presenti PRIMA di connettersi - cos- al primo sync non scattano notifiche
     var _idKnown={};
-    ordini.forEach(function(o){if(o&&o.id)_idKnown[o.id]=true;});
+    var _bozzaKnown={};
+    ordini.forEach(function(o){if(o&&o.id){_idKnown[o.id]=true; if(o.stato==='bozza') _bozzaKnown[o.id]=true;}});
     var _first=true;
     _fbDb.ref('ordini').on('value',function(snap){
       if(_fbSyncing)return;
@@ -263,7 +264,7 @@ document.addEventListener('DOMContentLoaded', function(){
       var fresh=_fbFix(d);
       // Aggiorna sempre _idKnown al primo sync (prima di confrontare)
       if(_first){
-        fresh.forEach(function(o){if(o&&o.id)_idKnown[o.id]=true;});
+        fresh.forEach(function(o){if(o&&o.id){_idKnown[o.id]=true; if(o.stato==='bozza') _bozzaKnown[o.id]=true;}});
         _first=false;
       }
       if(JSON.stringify(fresh)===JSON.stringify(ordini))return;
@@ -281,6 +282,14 @@ document.addEventListener('DOMContentLoaded', function(){
         }
         // Aggiorna _idKnown anche per ordini non-nuovi appena arrivati
         fresh.forEach(function(o){if(o&&o.id)_idKnown[o.id]=true;});
+        // Bozze nuove — notifica browser + modal (come per gli ordini normali)
+        var nuoveBozze=fresh.filter(function(o){return o.stato==='bozza'&&!_bozzaKnown[o.id];});
+        if(nuoveBozze.length){
+          nuoveBozze.forEach(function(o){_bozzaKnown[o.id]=true;});
+          if(typeof mostraNotificaBozza === 'function'){
+            mostraNotificaBozza(nuoveBozze[nuoveBozze.length-1]);
+          }
+        }
       }catch(e){console.error('FB ordini:',e);}
       setTimeout(function(){_fbSyncing=false;},500);
     });

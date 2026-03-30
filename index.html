@@ -230,7 +230,31 @@ body.light-mode #confirm-overlay > div { background:#fff; }
   </div>
 </div>
 
-<!-- Popup ⚙️ Altro -->
+<!-- Modal Notifica Bozza (stile blu, analogo al modal ordini) -->
+<div id="bozza-modal-backdrop">
+  <div id="bozza-modal">
+    <div id="bozza-modal-header">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <span style="font-size:28px;">📡</span>
+        <div>
+          <div style="font-size:18px;font-weight:900;color:#63b3ed;">BOZZA IN COSTRUZIONE</div>
+          <div id="bmd-cliente" style="font-size:13px;color:#90cdf4;"></div>
+        </div>
+        <div style="margin-left:auto;text-align:right;">
+          <div id="bmd-ora" style="font-size:11px;color:#63b3ed;"></div>
+        </div>
+      </div>
+    </div>
+    <div id="bozza-modal-body">
+      <div id="bmd-righe"></div>
+      <div id="bmd-nota" style="margin-top:8px;padding:8px 10px;background:#111;border-radius:7px;font-size:11px;color:#888;display:none;"></div>
+    </div>
+    <div id="bozza-modal-footer">
+      <button onclick="bozzaModalVaiOrdini()" style="flex:1;padding:11px;border-radius:10px;border:none;background:#3182ce;color:#fff;font-size:13px;font-weight:800;cursor:pointer;">📋 Vai alle Bozze</button>
+      <button onclick="closeBozzaModal()" style="padding:11px 18px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:13px;cursor:pointer;">OK</button>
+    </div>
+  </div>
+</div>
 <div id="altro-popup-backdrop" onclick="closeAltroMenu()" style="position:fixed;inset:0;z-index:998;display:none;"></div>
 <div id="altro-popup" style="position:fixed;bottom:62px;right:0;z-index:999;background:#1e1e1e;border:1px solid var(--border);border-radius:12px 12px 4px 4px;box-shadow:0 -4px 24px rgba(0,0,0,.6);display:grid;grid-template-columns:repeat(3,1fr);gap:0;transition:opacity .18s,transform .18s;min-width:240px;overflow:hidden;">
   <button id="theme-toggle-btn" onclick="toggleTheme()" class="altro-btn">

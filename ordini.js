@@ -1081,11 +1081,8 @@ function _updateBozzaBadge(){
     var toTab=document.getElementById('to');
     var tabAttiva = toTab && toTab.classList.contains('active');
     if(!tabAttiva){
-      showToastGen('blue','📡 Banco: ordine in costruzione!');
       var tbbTo=document.getElementById('tbb-to');
       if(tbbTo){ tbbTo.style.color='#63b3ed'; setTimeout(function(){tbbTo.style.color='';},3000); }
-    } else {
-      showToastGen('blue','📡 Banco: ordine in costruzione!');
     }
   }
   _bozzaBadgeLast = nBozze;
@@ -1137,7 +1134,7 @@ function startAutoRefresh(){
       if(toTab&&toTab.classList.contains('active')){
         renderOrdini();
       } else {
-        // Tab non attiva: se è arrivata una bozza nuova, notifica l'ufficio
+        // Tab non attiva: badge e notifica gestiti da _updateBozzaBadge()
         var nuoveBozze=fresh.filter(function(o){return o.stato==='bozza';}).length;
         if(nuoveBozze>prevBozze){
           var tbbTo=document.getElementById('tbb-to');
@@ -1145,7 +1142,11 @@ function startAutoRefresh(){
             tbbTo.style.color='#63b3ed';
             setTimeout(function(){tbbTo.style.color='';},3000);
           }
-          showToastGen('blue','📡 Banco: ordine in costruzione!');
+          // Notifica browser + modal per bozza
+          var bozzeArr=fresh.filter(function(o){return o.stato==='bozza';});
+          if(bozzeArr.length && typeof mostraNotificaBozza === 'function'){
+            mostraNotificaBozza(bozzeArr[0]);
+          }
         }
       }
       // Notifica sonora per nuovi ordini normali
