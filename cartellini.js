@@ -109,99 +109,8 @@ var CT = {
     lsSet(CTK, ctRows);
   },
 
-  // ── Filtro attivo (null = da fare, 'fatto', 'tutti', oppure nome colore) ──
-  _filter: null,
-  _fattiOpen: true,
-
-  setFilter: function(f){
-    CT._filter = f;
-    CT.render();
-  },
-
   // ── RENDER lista cartellini ───────────────────────────────────────
-  // Genera una riga della tabella cartellini
-  _renderRow: function(r, i, isFatto){
-    var c = CT.color(r.giornalino||'');
-    var promoOn = (r.barrato==='si' || r.promo==='si');
-    var opacity = isFatto ? 'opacity:.55;' : '';
-
-    var h = '<tr style="border-bottom:1px solid #222;border-left:3px solid '+c.dot+';'+opacity+'">';
-
-    // Checkbox fatto
-    h += '<td style="padding:2px 4px;text-align:center;width:28px;">';
-    h += '<button onclick="ct_toggleFatto('+i+')" style="border:none;background:transparent;font-size:16px;cursor:pointer;padding:0;touch-action:manipulation;line-height:1;">';
-    h += isFatto ? '✅' : '⬜';
-    h += '</button></td>';
-
-    // Prodotto
-    h += '<td style="padding:6px 4px;">';
-    h += '<div style="font-size:12px;font-weight:700;color:'+(isFatto?'#555':'#e8e8e8')+';line-height:1.2;'+(isFatto?'text-decoration:line-through;':'')+'">'+esc(r.desc||'\u2014')+'</div>';
-    if(r.codM) h += '<div style="font-size:9px;color:'+(isFatto?'#444':'var(--accent)')+';margin-top:1px;">'+esc(r.codM)+'</div>';
-    h += '</td>';
-
-    // Cod.F editabile
-    h += '<td style="padding:2px;text-align:center;">';
-    h += '<input type="text" value="'+esc(r.codF||'')+'" placeholder="\u2014"';
-    h += ' onchange="ct_setCodF('+i+',this.value)"';
-    h += ' style="width:100%;padding:3px 2px;border:none;border-bottom:1px dashed #333;background:transparent;color:#fc8181;font-size:10px;text-align:center;outline:none;box-sizing:border-box;">';
-    h += '</td>';
-
-    // Prezzo vecchio
-    h += '<td style="padding:2px;text-align:center;">';
-    if(promoOn){
-      h += '<input type="text" value="'+esc(r.prezzoOld||'')+'" placeholder="\u2014"';
-      h += ' onchange="ct_setPrezzoOld('+i+',this.value)"';
-      h += ' style="width:100%;padding:3px 2px;border:none;border-bottom:1px dashed #e53e3e44;background:transparent;color:#fc8181;font-size:10px;font-weight:700;text-align:center;text-decoration:line-through;outline:none;box-sizing:border-box;">';
-    } else {
-      h += '<button onclick="ct_togglePromo('+i+')" style="border:none;background:transparent;color:#333;font-size:10px;cursor:pointer;padding:2px;">\u2702</button>';
-    }
-    h += '</td>';
-
-    // Prezzo nuovo
-    h += '<td style="padding:2px;text-align:center;">';
-    h += '<input type="text" value="'+esc(r.prezzo||'')+'" placeholder="\u20AC"';
-    h += ' onchange="ct_setPrezzo('+i+',this.value)"';
-    h += ' style="width:100%;padding:3px 2px;border:none;border-bottom:1px solid var(--accent)44;background:transparent;color:var(--accent);font-size:12px;font-weight:900;text-align:center;outline:none;box-sizing:border-box;">';
-    h += '</td>';
-
-    // Dimensione
-    h += '<td style="padding:2px;text-align:center;">';
-    h += '<select onchange="ct_setSize('+i+',this.value)" style="width:100%;padding:1px;border:none;background:transparent;color:#888;font-size:9px;outline:none;-webkit-appearance:none;appearance:none;text-align:center;cursor:pointer;">';
-    h += '<option value="small"'+(r.size==='small'?' selected':'')+'>P</option>';
-    h += '<option value="large"'+(r.size==='large'?' selected':'')+'>G</option>';
-    h += '</select></td>';
-
-    // Colore tendina
-    h += '<td style="padding:2px;text-align:center;">';
-    h += '<select onchange="ct_setColor('+i+',this.value)" style="width:100%;padding:1px;border:none;background:'+c.bg+';color:'+c.dot+';font-size:9px;font-weight:800;outline:none;border-radius:4px;cursor:pointer;">';
-    CT.COLORS.forEach(function(col){
-      h += '<option value="'+col.val+'" style="background:#111;color:'+col.dot+';"'+(((r.giornalino||'')===col.val)?' selected':'')+'>'+col.label+'</option>';
-    });
-    h += '</select></td>';
-
-    // Elimina
-    h += '<td style="padding:2px;text-align:center;">';
-    h += '<button onclick="ct_del('+i+')" style="border:none;background:transparent;color:#e53e3e66;font-size:14px;cursor:pointer;padding:0;touch-action:manipulation;">\u2715</button>';
-    h += '</td>';
-
-    h += '</tr>';
-    return h;
-  },
-
-  _renderThead: function(){
-    var h = '<thead><tr style="background:#1a1a1a;position:sticky;top:110px;z-index:10;">';
-    h += '<th style="padding:6px 2px;width:28px;"></th>';
-    h += '<th style="padding:6px 4px;text-align:left;color:var(--accent);font-size:10px;">Prodotto</th>';
-    h += '<th style="padding:6px 2px;text-align:center;color:#888;font-size:10px;width:52px;">Cod.F</th>';
-    h += '<th style="padding:6px 2px;text-align:center;color:#888;font-size:10px;width:48px;">\u20AC Vec</th>';
-    h += '<th style="padding:6px 2px;text-align:center;color:var(--accent);font-size:10px;width:54px;">\u20AC Nuovo</th>';
-    h += '<th style="padding:6px 2px;text-align:center;color:#888;font-size:10px;width:32px;">Dim</th>';
-    h += '<th style="padding:6px 2px;text-align:center;color:#888;font-size:10px;width:40px;">Col</th>';
-    h += '<th style="padding:6px 0;width:24px;"></th>';
-    h += '</tr></thead>';
-    return h;
-  },
-
+  // ── RENDER lista cartellini — formato tabella compatta ──────────
   render: function(){
     var list   = document.getElementById('ct-list');
     var empty  = document.getElementById('ct-empty');
@@ -220,56 +129,78 @@ var CT = {
     list.style.display  = 'block';
     if(footer) footer.style.display = 'flex';
 
-    var filter = CT._filter;
-    var self = this;
+    var h = '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
+    h += '<thead><tr style="background:#1a1a1a;position:sticky;top:110px;z-index:10;">';
+    h += '<th style="padding:6px 4px;text-align:left;color:var(--accent);font-size:10px;">Prodotto</th>';
+    h += '<th style="padding:6px 2px;text-align:center;color:#888;font-size:10px;width:52px;">Cod.F</th>';
+    h += '<th style="padding:6px 2px;text-align:center;color:#888;font-size:10px;width:48px;">\u20AC Vec</th>';
+    h += '<th style="padding:6px 2px;text-align:center;color:var(--accent);font-size:10px;width:54px;">\u20AC Nuovo</th>';
+    h += '<th style="padding:6px 2px;text-align:center;color:#888;font-size:10px;width:32px;">Dim</th>';
+    h += '<th style="padding:6px 2px;text-align:center;color:#888;font-size:10px;width:40px;">Col</th>';
+    h += '<th style="padding:6px 0;width:24px;"></th>';
+    h += '</tr></thead><tbody>';
 
-    // Filtra gli indici in base al filtro attivo
-    var filtered = [];
     ctRows.forEach(function(r, i){
-      if(filter === null || filter === undefined){
-        // Default: mostra da fare
-        if(!r.fatto) filtered.push(i);
-      } else if(filter === 'fatto'){
-        if(r.fatto) filtered.push(i);
-      } else if(filter === 'tutti'){
-        filtered.push(i);
+      var c = CT.color(r.giornalino||'');
+      var promoOn = (r.barrato==='si' || r.promo==='si');
+
+      h += '<tr style="border-bottom:1px solid #222;border-left:3px solid '+c.dot+';">';
+
+      // Prodotto
+      h += '<td style="padding:6px 4px;">';
+      h += '<div style="font-size:12px;font-weight:700;color:#e8e8e8;line-height:1.2;">'+esc(r.desc||'\u2014')+'</div>';
+      if(r.codM) h += '<div style="font-size:9px;color:var(--accent);margin-top:1px;">'+esc(r.codM)+'</div>';
+      h += '</td>';
+
+      // Cod.F editabile
+      h += '<td style="padding:2px;text-align:center;">';
+      h += '<input type="text" value="'+esc(r.codF||'')+'" placeholder="\u2014"';
+      h += ' onchange="ct_setCodF('+i+',this.value)"';
+      h += ' style="width:100%;padding:3px 2px;border:none;border-bottom:1px dashed #333;background:transparent;color:#fc8181;font-size:10px;text-align:center;outline:none;box-sizing:border-box;">';
+      h += '</td>';
+
+      // Prezzo vecchio
+      h += '<td style="padding:2px;text-align:center;">';
+      if(promoOn){
+        h += '<input type="text" value="'+esc(r.prezzoOld||'')+'" placeholder="\u2014"';
+        h += ' onchange="ct_setPrezzoOld('+i+',this.value)"';
+        h += ' style="width:100%;padding:3px 2px;border:none;border-bottom:1px dashed #e53e3e44;background:transparent;color:#fc8181;font-size:10px;font-weight:700;text-align:center;text-decoration:line-through;outline:none;box-sizing:border-box;">';
       } else {
-        // Filtro per colore giornalino
-        if((r.giornalino||'') === filter && !r.fatto) filtered.push(i);
+        h += '<button onclick="ct_togglePromo('+i+')" style="border:none;background:transparent;color:#333;font-size:10px;cursor:pointer;padding:2px;">\u2702</button>';
       }
+      h += '</td>';
+
+      // Prezzo nuovo
+      h += '<td style="padding:2px;text-align:center;">';
+      h += '<input type="text" value="'+esc(r.prezzo||'')+'" placeholder="\u20AC"';
+      h += ' onchange="ct_setPrezzo('+i+',this.value)"';
+      h += ' style="width:100%;padding:3px 2px;border:none;border-bottom:1px solid var(--accent)44;background:transparent;color:var(--accent);font-size:12px;font-weight:900;text-align:center;outline:none;box-sizing:border-box;">';
+      h += '</td>';
+
+      // Dimensione
+      h += '<td style="padding:2px;text-align:center;">';
+      h += '<select onchange="ct_setSize('+i+',this.value)" style="width:100%;padding:1px;border:none;background:transparent;color:#888;font-size:9px;outline:none;-webkit-appearance:none;appearance:none;text-align:center;cursor:pointer;">';
+      h += '<option value="small"'+(r.size==='small'?' selected':'')+'>P</option>';
+      h += '<option value="large"'+(r.size==='large'?' selected':'')+'>G</option>';
+      h += '</select></td>';
+
+      // Colore tendina
+      h += '<td style="padding:2px;text-align:center;">';
+      h += '<select onchange="ct_setColor('+i+',this.value)" style="width:100%;padding:1px;border:none;background:'+c.bg+';color:'+c.dot+';font-size:9px;font-weight:800;outline:none;border-radius:4px;cursor:pointer;">';
+      CT.COLORS.forEach(function(col){
+        h += '<option value="'+col.val+'" style="background:#111;color:'+col.dot+';"'+(((r.giornalino||'')===col.val)?' selected':'')+'>'+col.label+'</option>';
+      });
+      h += '</select></td>';
+
+      // Elimina
+      h += '<td style="padding:2px;text-align:center;">';
+      h += '<button onclick="ct_del('+i+')" style="border:none;background:transparent;color:#e53e3e66;font-size:14px;cursor:pointer;padding:0;touch-action:manipulation;">\u2715</button>';
+      h += '</td>';
+
+      h += '</tr>';
     });
 
-    var h = '';
-
-    // Titolo filtro attivo
-    var filterLabel = '';
-    if(filter === null || filter === undefined) filterLabel = '📋 Da fare';
-    else if(filter === 'fatto') filterLabel = '✅ Fatti';
-    else if(filter === 'tutti') filterLabel = '🏷️ Tutti';
-    else {
-      var cc = CT.color(filter);
-      filterLabel = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+cc.dot+';margin-right:4px;"></span>' + (cc.label||filter);
-    }
-    h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 8px;">';
-    h += '<span style="font-size:12px;font-weight:800;color:#888;">'+filterLabel+' <span style="color:#555;">('+filtered.length+')</span></span>';
-    if(filter !== null && filter !== undefined){
-      h += '<button onclick="CT.setFilter(null)" style="border:none;background:transparent;color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;padding:2px 6px;touch-action:manipulation;">✕ Reset filtro</button>';
-    }
-    h += '</div>';
-
-    // Tabella
-    h += '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
-    h += self._renderThead();
-    h += '<tbody>';
-    if(!filtered.length){
-      var emptyMsg = filter==='fatto' ? '📋 Nessun cartellino fatto ancora' : '🎉 Tutto fatto!';
-      h += '<tr><td colspan="8" style="padding:24px;text-align:center;color:#555;font-size:13px;">'+emptyMsg+'</td></tr>';
-    }
-    filtered.forEach(function(i){
-      h += self._renderRow(ctRows[i], i, !!ctRows[i].fatto);
-    });
     h += '</tbody></table>';
-
     list.innerHTML = h;
     CT.updateDashboard();
   },
@@ -279,44 +210,26 @@ var CT = {
     var dash = document.getElementById('ct-dashboard');
     if(!dash) return;
 
-    var f = CT._filter;
-    var numFatti = ctRows.filter(function(r){ return r.fatto; }).length;
-    var numDaFare = ctRows.length - numFatti;
+    var h = '<div style="flex-shrink:0;background:#1a1a1a;border-radius:10px;padding:6px 12px;border:1px solid #2a2a2a;text-align:center;min-width:56px;">'
+          + '<div style="font-size:18px;font-weight:900;color:var(--accent);line-height:1;">'+ctRows.length+'</div>'
+          + '<div style="font-size:9px;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-top:1px;">Totale</div>'
+          + '</div>';
 
-    // Helper: genera un badge cliccabile
-    function badge(filterVal, count, label, bg, borderColor, numColor, labelColor){
-      var isActive = (f === filterVal) || (f === null && filterVal === null) || (f === undefined && filterVal === null);
-      var ring = isActive ? 'border:2px solid '+numColor+';' : 'border:1px solid '+borderColor+';';
-      var scale = isActive ? 'transform:scale(1.08);' : '';
-      return '<div onclick="CT.setFilter('+(filterVal===null?'null':("'"+filterVal+"'"))+')"'
-        +' style="flex-shrink:0;background:'+bg+';border-radius:10px;padding:6px 12px;'+ring+'text-align:center;min-width:56px;cursor:pointer;touch-action:manipulation;transition:all .15s;'+scale+'">'
-        +'<div style="font-size:18px;font-weight:900;color:'+numColor+';line-height:1;">'+count+'</div>'
-        +'<div style="font-size:9px;color:'+labelColor+';text-transform:uppercase;letter-spacing:.5px;margin-top:1px;">'+label+'</div>'
-        +'</div>';
-    }
-
-    var h = '';
-
-    // Tutti
-    h += badge('tutti', ctRows.length, 'Tutti', '#1a1a1a', '#2a2a2a', 'var(--accent)', '#555');
-
-    // Da fare (default)
-    h += badge(null, numDaFare, 'Da fare', '#1a1200', '#d69e2e44', '#d69e2e', '#f6e05e');
-
-    // Fatti
-    h += badge('fatto', numFatti, 'Fatti', '#081f08', '#38a16944', '#38a169', '#68d391');
-
-    // Colori giornalino
     CT.COLORS.slice(1).forEach(function(col){
-      var count = ctRows.filter(function(r){ return (r.giornalino||'')===col.val && !r.fatto; }).length;
+      var count = ctRows.filter(function(r){ return (r.giornalino||'')===col.val; }).length;
       if(!count) return;
-      h += badge(col.val, count, col.label, col.bg, col.dot+'44', col.dot, col.text);
+      h += '<div style="flex-shrink:0;background:'+col.bg+';border-radius:10px;padding:6px 12px;border:1px solid '+col.dot+'44;text-align:center;min-width:56px;">'
+         + '<div style="font-size:18px;font-weight:900;color:'+col.dot+';line-height:1;">'+count+'</div>'
+         + '<div style="font-size:9px;color:'+col.text+';text-transform:uppercase;letter-spacing:.5px;margin-top:1px;">'+col.label+'</div>'
+         + '</div>';
     });
 
-    // Senza colore
-    var noColor = ctRows.filter(function(r){ return !(r.giornalino||'') && !r.fatto; }).length;
+    var noColor = ctRows.filter(function(r){ return !(r.giornalino||''); }).length;
     if(noColor && ctRows.length){
-      h += badge('', noColor, 'Nessuno', '#1a1a1a', '#2a2a2a', '#555', '#444');
+      h += '<div style="flex-shrink:0;background:#1a1a1a;border-radius:10px;padding:6px 12px;border:1px solid #2a2a2a;text-align:center;min-width:56px;">'
+         + '<div style="font-size:18px;font-weight:900;color:#555;line-height:1;">'+noColor+'</div>'
+         + '<div style="font-size:9px;color:#444;text-transform:uppercase;letter-spacing:.5px;margin-top:1px;">Nessuno</div>'
+         + '</div>';
     }
 
     dash.innerHTML = h;
@@ -378,17 +291,6 @@ function ct_setSize(i, val){
   if(!ctRows[i]) return;
   ctRows[i].size = val;
   CT.save();
-}
-
-function ct_toggleFatto(i){
-  if(!ctRows[i]) return;
-  ctRows[i].fatto = !ctRows[i].fatto;
-  if(ctRows[i].fatto){
-    ctRows[i].fattoAt = new Date().toLocaleString('it-IT');
-  } else {
-    delete ctRows[i].fattoAt;
-  }
-  CT.save(); CT.render();
 }
 
 function ct_del(i){
@@ -545,13 +447,14 @@ document.addEventListener('click', function(e){
 
 // ── Integrazione con import CSV ──────────────────────────────────────────────
 // Override di confirmImp: il CSV aggiunge ai cartellini (ctRows)
-// e aggiorna SOLO il codF nel database se mancava (mai sovrascrive desc/prezzo)
+// e aggiorna il database: codF, prezzo (con storico), prezzoAcquisto, qty
 var confirmImp = (function(_ci_orig){
   return function(){
     // Formato nuovo con pendingImportDB
     if(typeof pendingImportDB !== 'undefined' && pendingImportDB && pendingImportDB.length){
       var aggiornatiCodF = 0;
-      var prezziGiornalino = 0;
+      var prezziAggiornati = 0;
+      var oggi = new Date().toLocaleDateString('it-IT');
 
       pendingImportDB.forEach(function(r){
         var coloreValido = ['rosso','verde','blu','giallo','viola','arancio','grigio'];
@@ -576,12 +479,11 @@ var confirmImp = (function(_ci_orig){
         var prezzoVecchio = '';
         if(dbRow && dbRow.prezzo && prezzoCartellino && dbRow.prezzo !== prezzoCartellino){
           prezzoVecchio = dbRow.prezzo;
-          prezziGiornalino++;
         }
 
         // Aggiungi al cartellino con il NOME del database
         var newRow = {
-          data: new Date().toLocaleDateString('it-IT'),
+          data: oggi,
           desc: descFinale,
           codF: r.codF || '',
           codM: r.codM || '',
@@ -596,23 +498,51 @@ var confirmImp = (function(_ci_orig){
         };
         ctRows.push(newRow);
 
-        // Aggiorna il database SOLO: codF se mancava
+        // ── Aggiorna il database ──
         if(dbIdx >= 0 && dbRow){
           var changed = false;
-          // CodF: salva se il prodotto non ce l'aveva
-          if(r.codF && !dbRow.codF){
+          // CodF: aggiorna se fornito
+          if(r.codF && r.codF !== dbRow.codF){
             dbRow.codF = r.codF;
             changed = true;
             aggiornatiCodF++;
           }
-          // Salva il prezzo giornalino come campo separato (non sovrascrive prezzo principale)
-          if(prezzoCartellino){
-            var mag = magazzino[dbIdx] || {};
-            mag.prezzoGiornalino = prezzoCartellino;
-            mag.prezzoGiornalinoData = new Date().toLocaleDateString('it-IT');
-            magazzino[dbIdx] = mag;
+          // Prezzo: storico se cambia
+          if(prezzoCartellino && prezzoCartellino !== dbRow.prezzo && dbRow.prezzo){
+            if(!dbRow.priceHistory) dbRow.priceHistory = [];
+            dbRow.prezzoOld = dbRow.prezzo;
+            dbRow.priceHistory.unshift({ prezzo: dbRow.prezzo, data: dbRow.data || '' });
+            if(dbRow.priceHistory.length > 5) dbRow.priceHistory.length = 5;
+            dbRow.prezzo = prezzoCartellino;
+            dbRow.data = oggi;
+            dbRow.size = (typeof autoSize === 'function') ? autoSize(prezzoCartellino) : dbRow.size;
+            changed = true;
+            prezziAggiornati++;
+          } else if(prezzoCartellino && !dbRow.prezzo){
+            dbRow.prezzo = prezzoCartellino;
+            dbRow.data = oggi;
+            changed = true;
+            prezziAggiornati++;
+          }
+          // PrezzoAcquisto e qty
+          var mag = magazzino[dbIdx] || {};
+          if(r.pa && r.pa !== mag.prezzoAcquisto){
+            mag.prezzoAcquisto = r.pa;
+            mag.prezzoAcquistoData = oggi;
             changed = true;
           }
+          if(r.qty > 0){
+            mag.qty = r.qty;
+            mag.qtyData = oggi;
+            changed = true;
+          }
+          // Prezzo giornalino come campo separato
+          if(prezzoCartellino){
+            mag.prezzoGiornalino = prezzoCartellino;
+            mag.prezzoGiornalinoData = oggi;
+            changed = true;
+          }
+          magazzino[dbIdx] = mag;
           if(changed){
             lsSet(SK, rows);
             lsSet(MAGK, magazzino);
@@ -623,8 +553,8 @@ var confirmImp = (function(_ci_orig){
 
       CT.save(); CT.render();
       var msg = '✅ ' + pendingImportDB.length + ' cartellini importati';
-      if(aggiornatiCodF > 0) msg += ' | ' + aggiornatiCodF + ' cod.forn. aggiunti';
-      if(prezziGiornalino > 0) msg += ' | ' + prezziGiornalino + ' con prezzo diverso';
+      if(aggiornatiCodF > 0) msg += ' | ' + aggiornatiCodF + ' cod.forn.';
+      if(prezziAggiornati > 0) msg += ' | ' + prezziAggiornati + ' prezzi aggiornati';
       showToastGen('green', msg);
       cancelImp();
       return;

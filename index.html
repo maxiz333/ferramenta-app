@@ -395,7 +395,7 @@ body.light-mode #confirm-overlay > div { background:#fff; }
     </button>
     <div id="ct-csv-panel" style="display:none;margin-top:8px;padding:12px;background:#1a1a1a;border-radius:12px;border:1px solid #2a2a2a;">
       <div style="font-size:12px;color:#666;margin-bottom:8px;">Trascina un file CSV o selezionalo</div>
-      <div id="drop-zone" onclick="document.getElementById('fi').click()"
+      <div id="drop-zone-ct" onclick="document.getElementById('fi-ct').click()"
         ondragover="event.preventDefault();this.classList.add('over')"
         ondragleave="this.classList.remove('over')"
         ondrop="onDrop(event,'cartellini');ct_toggleCsv();">
@@ -403,9 +403,9 @@ body.light-mode #confirm-overlay > div { background:#fff; }
         <p style="margin:0;font-size:13px;"><b>Clicca o trascina</b> il file CSV</p>
         <small>Separatore ; o , · colonna Giornalino</small>
       </div>
-      <input type="file" id="fi" accept=".csv,.txt" style="display:none" onchange="onFileIn(event,'cartellini');ct_toggleCsv();">
-      <div id="imp-prev" style="display:none;margin-top:10px;">
-        <div id="imp-wrap" style="overflow-x:auto;max-height:220px;border:1px solid #2a2a2a;border-radius:8px;padding:4px;font-size:11px;"></div>
+      <input type="file" id="fi-ct" accept=".csv,.txt" style="display:none" onchange="onFileIn(event,'cartellini');ct_toggleCsv();">
+      <div id="imp-prev-ct" style="display:none;margin-top:10px;">
+        <div id="imp-wrap-ct" style="overflow-x:auto;max-height:220px;border:1px solid #2a2a2a;border-radius:8px;padding:4px;font-size:11px;"></div>
         <div style="margin-top:8px;display:flex;gap:6px;">
           <button class="btn btn-green" onclick="confirmImp()">✅ Importa</button>
           <button class="btn btn-gray" onclick="cancelImp()">✕ Annulla</button>
@@ -1250,7 +1250,9 @@ body.light-mode #confirm-overlay > div { background:#fff; }
         <input type="text" id="ep-prezzoold" readonly style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px 8px 0 0;background:#111;color:var(--muted);font-size:13px;cursor:pointer;" onclick="togglePriceHistory()">
         <div id="ep-price-history" style="display:none;background:#0d0d0d;border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;padding:4px 8px;">
           <div id="ep-ph-2" style="font-size:11px;color:#666;padding:3px 0;border-bottom:1px solid #1a1a1a;">—</div>
-          <div id="ep-ph-3" style="font-size:11px;color:#555;padding:3px 0;">—</div>
+          <div id="ep-ph-3" style="font-size:11px;color:#555;padding:3px 0;border-bottom:1px solid #1a1a1a;">—</div>
+          <div id="ep-ph-4" style="font-size:11px;color:#4a4a4a;padding:3px 0;border-bottom:1px solid #1a1a1a;">—</div>
+          <div id="ep-ph-5" style="font-size:11px;color:#3a3a3a;padding:3px 0;">—</div>
         </div>
       </div>
       <div style="width:90px;">

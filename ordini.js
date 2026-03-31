@@ -409,8 +409,8 @@ function _syncPrezziOrdineAlDB(ord){
       r.prezzoOld = r.prezzo;
       // Aggiungi il prezzo corrente in cima allo storico
       r.priceHistory.unshift({ prezzo: r.prezzo, data: r.data || '' });
-      // Max 3 nello storico
-      if(r.priceHistory.length > 3) r.priceHistory.length = 3;
+      // Max 5 nello storico
+      if(r.priceHistory.length > 5) r.priceHistory.length = 5;
     }
     // Scrivi nuovo prezzo
     r.prezzo = prezzoOrd;
@@ -2388,11 +2388,11 @@ function openEditProdotto(i, isNew){
   sf('ep-prezzoold', r.prezzoOld || '');
   // Popola tendina storico prezzi
   var ph = r.priceHistory || [];
-  var ph2El = document.getElementById('ep-ph-2');
-  var ph3El = document.getElementById('ep-ph-3');
   var phWrap = document.getElementById('ep-price-history');
-  if(ph2El) ph2El.textContent = ph[0] ? ('€ ' + ph[0].prezzo + (ph[0].data ? ' — ' + ph[0].data : '')) : '—';
-  if(ph3El) ph3El.textContent = ph[1] ? ('€ ' + ph[1].prezzo + (ph[1].data ? ' — ' + ph[1].data : '')) : '—';
+  for(var pi = 0; pi < 4; pi++){
+    var phEl = document.getElementById('ep-ph-' + (pi + 2));
+    if(phEl) phEl.textContent = ph[pi] ? ('€ ' + ph[pi].prezzo + (ph[pi].data ? ' — ' + ph[pi].data : '')) : '—';
+  }
   if(phWrap) phWrap.style.display = 'none'; // chiusa di default
   sf('ep-acq',    m.prezzoAcquisto || '');
   sf('ep-specs',  m.specs || '');
