@@ -257,6 +257,12 @@ body.light-mode #confirm-overlay > div { background:#fff; }
   <button onclick="closeAltroMenu();goTab('t12')" id="atb-t12" class="altro-btn">
     <span style="font-size:22px;">🗂️</span><span>Categorie</span>
   </button>
+  <button onclick="closeAltroMenu();esportaDatabaseCSV()" id="atb-export" class="altro-btn">
+    <span style="font-size:22px;">📥</span><span>Esporta DB</span>
+  </button>
+  <button onclick="closeAltroMenu();if(confirm('Sincronizzare TUTTI gli articoli con dati magazzino su Firebase?'))fbSyncTuttoMagazzino();" id="atb-sync" class="altro-btn">
+    <span style="font-size:22px;">☁️</span><span>Sync FB</span>
+  </button>
 </div>
 
 <div id="cartellin-popup-backdrop" onclick="closeCartellinPopup()"

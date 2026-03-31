@@ -309,6 +309,30 @@ function ordBozzaSetPrezzo(bozzaId, ii, el){
       cartCollegato.items[ii].prezzoUnit = it.prezzoUnit;
       saveCarrelli();
     }
+    // ── Aggiorna prezzo nel database articoli ──
+    if(v && v !== oldVal){
+      var dbIdx = -1;
+      if(it.rowIdx !== undefined && it.rowIdx !== null && rows[it.rowIdx]) dbIdx = it.rowIdx;
+      else if(it.codM){
+        for(var ri = 0; ri < rows.length; ri++){
+          if(rows[ri] && rows[ri].codM === it.codM){ dbIdx = ri; break; }
+        }
+      }
+      if(dbIdx >= 0 && rows[dbIdx]){
+        var r = rows[dbIdx];
+        if(r.prezzo && r.prezzo !== v){
+          r.prezzoOld = r.prezzo;
+          if(!r.priceHistory) r.priceHistory = [];
+          r.priceHistory.unshift({ prezzo: r.prezzo, data: r.data || '' });
+          if(r.priceHistory.length > 3) r.priceHistory.length = 3;
+        }
+        r.prezzo = v;
+        r.data = new Date().toLocaleDateString('it-IT');
+        r.size = (typeof autoSize === 'function') ? autoSize(v) : r.size;
+        lsSet(SK, rows);
+        if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(dbIdx);
+      }
+    }
     renderOrdini();
   }
   inp.addEventListener('blur', save);
