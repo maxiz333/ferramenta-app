@@ -257,12 +257,6 @@ body.light-mode #confirm-overlay > div { background:#fff; }
   <button onclick="closeAltroMenu();goTab('t12')" id="atb-t12" class="altro-btn">
     <span style="font-size:22px;">🗂️</span><span>Categorie</span>
   </button>
-  <button onclick="closeAltroMenu();esportaDatabaseCSV()" id="atb-export" class="altro-btn">
-    <span style="font-size:22px;">📥</span><span>Esporta DB</span>
-  </button>
-  <button onclick="closeAltroMenu();if(confirm('Sincronizzare TUTTI gli articoli con dati magazzino su Firebase? Può richiedere qualche secondo.'))fbSyncTuttoMagazzino();" id="atb-sync" class="altro-btn">
-    <span style="font-size:22px;">☁️</span><span>Sync FB</span>
-  </button>
 </div>
 
 <div id="cartellin-popup-backdrop" onclick="closeCartellinPopup()"
@@ -617,14 +611,66 @@ body.light-mode #confirm-overlay > div { background:#fff; }
   <div style="display:flex;gap:16px;flex-wrap:wrap;">
     <!-- Controlli -->
     <div style="flex:1;min-width:220px;">
+
+      <!-- COLORI -->
       <div style="background:#1e1e1e;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid var(--border);">
         <p style="font-size:12px;font-weight:bold;color:#1e3a5f;margin-bottom:10px;">🎨 Colori</p>
         <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Colore prezzo</label>
         <input type="color" id="ec-price-color" value="#000000" onchange="applyEditor()" style="width:60px;height:30px;border:none;cursor:pointer;border-radius:4px;">
         <label style="font-size:11px;color:var(--muted);display:block;margin-top:10px;margin-bottom:4px;">Colore bordo cartellino</label>
         <input type="color" id="ec-border-color" value="#aaaaaa" onchange="applyEditor()" style="width:60px;height:30px;border:none;cursor:pointer;border-radius:4px;">
+        <label style="font-size:11px;color:var(--muted);display:block;margin-top:10px;margin-bottom:4px;">Colore cornice</label>
+        <input type="color" id="ec-frame-color" value="#aaaaaa" onchange="applyEditor()" style="width:60px;height:30px;border:none;cursor:pointer;border-radius:4px;">
       </div>
 
+      <!-- FONT SIZES -->
+      <div style="background:#1e1e1e;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid var(--border);">
+        <p style="font-size:12px;font-weight:bold;color:#1e3a5f;margin-bottom:10px;">🔤 Dimensione Testi</p>
+
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+            <label style="font-size:11px;color:var(--muted);">Prezzo (piccolo)</label>
+            <span id="ec-price-font-sm-val" style="font-size:11px;color:var(--accent);font-weight:700;">26pt</span>
+          </div>
+          <input type="range" id="ec-price-font-sm" min="14" max="42" value="26" oninput="ec_updateSliderVal('ec-price-font-sm','ec-price-font-sm-val','pt')" style="width:100%;accent-color:var(--accent);">
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+            <label style="font-size:11px;color:var(--muted);">Prezzo (grande)</label>
+            <span id="ec-price-font-lg-val" style="font-size:11px;color:var(--accent);font-weight:700;">32pt</span>
+          </div>
+          <input type="range" id="ec-price-font-lg" min="18" max="52" value="32" oninput="ec_updateSliderVal('ec-price-font-lg','ec-price-font-lg-val','pt')" style="width:100%;accent-color:var(--accent);">
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+            <label style="font-size:11px;color:var(--muted);">Scritta PROMO</label>
+            <span id="ec-promo-font-val" style="font-size:11px;color:#e53e3e;font-weight:700;">6pt</span>
+          </div>
+          <input type="range" id="ec-promo-font" min="4" max="14" value="6" oninput="ec_updateSliderVal('ec-promo-font','ec-promo-font-val','pt')" style="width:100%;accent-color:#e53e3e;">
+        </div>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+            <label style="font-size:11px;color:var(--muted);">Prezzo barrato</label>
+            <span id="ec-oldprice-font-val" style="font-size:11px;color:#888;font-weight:700;">10pt</span>
+          </div>
+          <input type="range" id="ec-oldprice-font" min="6" max="22" value="10" oninput="ec_updateSliderVal('ec-oldprice-font','ec-oldprice-font-val','pt')" style="width:100%;accent-color:#888;">
+        </div>
+      </div>
+
+      <!-- BORDO -->
+      <div style="background:#1e1e1e;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid var(--border);">
+        <p style="font-size:12px;font-weight:bold;color:#1e3a5f;margin-bottom:10px;">📏 Spessore bordo</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+          <label style="font-size:11px;color:var(--muted);">Spessore</label>
+          <span id="ec-border-width-val" style="font-size:11px;color:var(--accent);font-weight:700;">0.5px</span>
+        </div>
+        <input type="range" id="ec-border-width" min="0" max="4" step="0.5" value="0.5" oninput="ec_updateSliderVal('ec-border-width','ec-border-width-val','px')" style="width:100%;accent-color:var(--accent);">
+      </div>
+
+      <!-- MISURE PICCOLO -->
       <div style="background:#1e1e1e;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid var(--border);">
         <p style="font-size:12px;font-weight:bold;color:#1e3a5f;margin-bottom:10px;">📐 Misure cartellino piccolo</p>
         <label style="font-size:11px;color:var(--muted);">Larghezza (mm)</label>
@@ -633,6 +679,7 @@ body.light-mode #confirm-overlay > div { background:#fff; }
         <input type="number" id="ec-sm-h" value="38" min="25" max="80" onchange="applyEditor()" style="width:70px;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;">
       </div>
 
+      <!-- MISURE GRANDE -->
       <div style="background:#1e1e1e;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid var(--border);">
         <p style="font-size:12px;font-weight:bold;color:#1e3a5f;margin-bottom:10px;">📐 Misure cartellino grande</p>
         <label style="font-size:11px;color:var(--muted);">Larghezza (mm)</label>
@@ -641,12 +688,64 @@ body.light-mode #confirm-overlay > div { background:#fff; }
         <input type="number" id="ec-lg-h" value="39" min="25" max="80" onchange="applyEditor()" style="width:70px;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;">
       </div>
 
+      <!-- FORMA CARTELLINO -->
+      <div style="background:#1e1e1e;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid var(--border);">
+        <p style="font-size:12px;font-weight:bold;color:#1e3a5f;margin-bottom:10px;">🔲 Forma Cartellino</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="ec-shape-btn active" data-shape="" onclick="ec_setShape('')"
+            style="padding:8px 12px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#ccc;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;">
+            ▬ Classico
+          </button>
+          <button class="ec-shape-btn" data-shape="rounded" onclick="ec_setShape('rounded')"
+            style="padding:8px 12px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#ccc;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;">
+            ▢ Arrotondato
+          </button>
+          <button class="ec-shape-btn" data-shape="pill" onclick="ec_setShape('pill')"
+            style="padding:8px 12px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#ccc;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;">
+            ⬭ Pillola
+          </button>
+          <button class="ec-shape-btn" data-shape="ticket" onclick="ec_setShape('ticket')"
+            style="padding:8px 12px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#ccc;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;">
+            🎟️ Ticket
+          </button>
+        </div>
+      </div>
+
+      <!-- CORNICE -->
+      <div style="background:#1e1e1e;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid var(--border);">
+        <p style="font-size:12px;font-weight:bold;color:#1e3a5f;margin-bottom:10px;">🖼️ Cornice Decorativa</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="ec-frame-btn active" data-frame="" onclick="ec_setFrame('')"
+            style="padding:8px 12px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#ccc;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;">
+            ✕ Nessuna
+          </button>
+          <button class="ec-frame-btn" data-frame="double" onclick="ec_setFrame('double')"
+            style="padding:8px 12px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#ccc;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;">
+            ▣ Doppio bordo
+          </button>
+          <button class="ec-frame-btn" data-frame="dotted" onclick="ec_setFrame('dotted')"
+            style="padding:8px 12px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#ccc;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;">
+            ⬜ Puntinata
+          </button>
+          <button class="ec-frame-btn" data-frame="elegant" onclick="ec_setFrame('elegant')"
+            style="padding:8px 12px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#ccc;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;">
+            ✦ Elegante
+          </button>
+          <button class="ec-frame-btn" data-frame="deco" onclick="ec_setFrame('deco')"
+            style="padding:8px 12px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#ccc;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;">
+            ❖ Decorata
+          </button>
+        </div>
+      </div>
+
+      <!-- RINOMINA GIORNALINI -->
       <div style="background:#1e1e1e;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid var(--border);">
         <p style="font-size:12px;font-weight:bold;color:#1e3a5f;margin-bottom:10px;">✏️ Rinomina Giornalini</p>
         <p style="font-size:11px;color:var(--muted);margin-bottom:8px;">Dai un nome personalizzato a ogni giornalino.</p>
         <div id="giornalini-rename"></div>
       </div>
 
+      <!-- PREZZO BARRATO -->
       <div style="background:#1e1e1e;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid var(--border);">
         <p style="font-size:12px;font-weight:bold;color:#1e3a5f;margin-bottom:10px;">✂️ Prezzo barrato</p>
         <p style="font-size:11px;color:var(--muted);margin-bottom:8px;">Mostra il prezzo vecchio barrato su tutti gli articoli che hanno un € Vecchio.</p>
@@ -656,13 +755,55 @@ body.light-mode #confirm-overlay > div { background:#fff; }
         </label>
       </div>
 
+      <!-- TESTO PROMO -->
+      <div style="background:#1e1e1e;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid var(--border);">
+        <p style="font-size:12px;font-weight:bold;color:#1e3a5f;margin-bottom:10px;">🏷️ Testo Nastro Promo</p>
+        <p style="font-size:11px;color:var(--muted);margin-bottom:8px;">Personalizza la scritta sul nastro (default: PROMO).</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+          <button onclick="ec_setPromoText('PROMO')" class="ec-promo-txt-btn" data-val="PROMO"
+            style="padding:6px 10px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#e53e3e;font-size:11px;font-weight:700;cursor:pointer;">PROMO</button>
+          <button onclick="ec_setPromoText('SALDI')" class="ec-promo-txt-btn" data-val="SALDI"
+            style="padding:6px 10px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#e53e3e;font-size:11px;font-weight:700;cursor:pointer;">SALDI</button>
+          <button onclick="ec_setPromoText('OFFERTA')" class="ec-promo-txt-btn" data-val="OFFERTA"
+            style="padding:6px 10px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#e53e3e;font-size:11px;font-weight:700;cursor:pointer;">OFFERTA</button>
+          <button onclick="ec_setPromoText('NUOVO')" class="ec-promo-txt-btn" data-val="NUOVO"
+            style="padding:6px 10px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#e53e3e;font-size:11px;font-weight:700;cursor:pointer;">NUOVO</button>
+          <button onclick="ec_setPromoText('-50%')" class="ec-promo-txt-btn" data-val="-50%"
+            style="padding:6px 10px;border-radius:4px;border:1.5px solid var(--border);background:transparent;color:#e53e3e;font-size:11px;font-weight:700;cursor:pointer;">-50%</button>
+        </div>
+        <input type="text" id="ec-promo-text" value="PROMO" maxlength="12" placeholder="Testo libero..."
+          oninput="ec_setPromoText(this.value)"
+          style="width:100%;padding:6px 8px;border:1px solid #333;border-radius:4px;background:#111;color:#e8e8e8;font-size:12px;font-weight:700;outline:none;box-sizing:border-box;">
+      </div>
+
+      <!-- SFONDO CARTELLINO -->
+      <div style="background:#1e1e1e;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid var(--border);">
+        <p style="font-size:12px;font-weight:bold;color:#1e3a5f;margin-bottom:10px;">🎨 Sfondo Cartellino</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button onclick="ec_setBg('#ffffff')" class="ec-bg-btn" data-val="#ffffff"
+            style="width:36px;height:36px;border-radius:6px;border:2px solid var(--border);background:#ffffff;cursor:pointer;" title="Bianco"></button>
+          <button onclick="ec_setBg('#fffbf0')" class="ec-bg-btn" data-val="#fffbf0"
+            style="width:36px;height:36px;border-radius:6px;border:2px solid var(--border);background:#fffbf0;cursor:pointer;" title="Crema"></button>
+          <button onclick="ec_setBg('#f5f5f5')" class="ec-bg-btn" data-val="#f5f5f5"
+            style="width:36px;height:36px;border-radius:6px;border:2px solid var(--border);background:#f5f5f5;cursor:pointer;" title="Grigio chiaro"></button>
+          <button onclick="ec_setBg('#fff0f0')" class="ec-bg-btn" data-val="#fff0f0"
+            style="width:36px;height:36px;border-radius:6px;border:2px solid var(--border);background:#fff0f0;cursor:pointer;" title="Rosa tenue"></button>
+          <button onclick="ec_setBg('#f0f7ff')" class="ec-bg-btn" data-val="#f0f7ff"
+            style="width:36px;height:36px;border-radius:6px;border:2px solid var(--border);background:#f0f7ff;cursor:pointer;" title="Azzurro tenue"></button>
+          <button onclick="ec_setBg('#f0fff0')" class="ec-bg-btn" data-val="#f0fff0"
+            style="width:36px;height:36px;border-radius:6px;border:2px solid var(--border);background:#f0fff0;cursor:pointer;" title="Verde tenue"></button>
+          <button onclick="ec_setBg('#fffff0')" class="ec-bg-btn" data-val="#fffff0"
+            style="width:36px;height:36px;border-radius:6px;border:2px solid var(--border);background:#fffff0;cursor:pointer;" title="Giallo tenue"></button>
+        </div>
+      </div>
+
       <button class="btn btn-gray" onclick="resetEditor()">↺ Ripristina default</button>
     </div>
 
     <!-- Anteprima -->
     <div style="flex:1;min-width:220px;">
       <p style="font-size:12px;font-weight:bold;color:#1e3a5f;margin-bottom:8px;">👁️ Anteprima</p>
-      <div id="ec-preview" style="background:#111;padding:10px;border-radius:8px;display:flex;flex-wrap:wrap;gap:4px;border:1px solid var(--border);"></div>
+      <div id="ec-preview" style="background:#fff;padding:14px;border-radius:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;border:1px solid var(--border);min-height:120px;"></div>
       <div style="margin-top:12px;">
         <button class="btn btn-green" onclick="window.print()">🖨️ Stampa</button>
         <button class="btn btn-orange" onclick="ct_genAnteprima()">👁️ Anteprima stampa</button>

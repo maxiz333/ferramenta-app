@@ -309,36 +309,6 @@ function ordBozzaSetPrezzo(bozzaId, ii, el){
       cartCollegato.items[ii].prezzoUnit = it.prezzoUnit;
       saveCarrelli();
     }
-    // ── Aggiorna prezzo nel database articoli ──────────────────
-    if(v && v !== oldVal){
-      // Trova l'articolo nel database tramite rowIdx o codM
-      var dbIdx = -1;
-      if(it.rowIdx !== undefined && it.rowIdx !== null && rows[it.rowIdx]){
-        dbIdx = it.rowIdx;
-      } else if(it.codM){
-        for(var ri = 0; ri < rows.length; ri++){
-          if(rows[ri] && rows[ri].codM === it.codM){ dbIdx = ri; break; }
-        }
-      }
-      if(dbIdx >= 0 && rows[dbIdx]){
-        var r = rows[dbIdx];
-        // Archivia prezzo corrente in prezzoOld e priceHistory
-        if(r.prezzo && r.prezzo !== v){
-          r.prezzoOld = r.prezzo;
-          if(!r.priceHistory) r.priceHistory = [];
-          r.priceHistory.unshift({ prezzo: r.prezzo, data: r.data || '' });
-          // Max 3 prezzi vecchi nello storico
-          if(r.priceHistory.length > 3) r.priceHistory.length = 3;
-        }
-        // Scrivi nuovo prezzo e data
-        r.prezzo = v;
-        r.data = new Date().toLocaleDateString('it-IT');
-        r.size = (typeof autoSize === 'function') ? autoSize(v) : r.size;
-        // Salva su localStorage e Firebase
-        lsSet(SK, rows);
-        if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(dbIdx);
-      }
-    }
     renderOrdini();
   }
   inp.addEventListener('blur', save);
@@ -766,7 +736,7 @@ function renderOrdini(){
       var nArt=(ord.items||[]).length;
       var tot=0;
       (ord.items||[]).forEach(function(it){tot+=parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0);});
-      h+='<div class="ord-card ord-card--bozza" style="position:relative;">';
+      h+='<div class="ord-card ord-card--bozza" data-bozza-id="'+ord.id+'" style="position:relative;">';
       // Banner pulsante
       h+='<div class="ord-card-stato ord-card-stato--bozza">';
       h+='📡 🔨 ⚡';
@@ -1111,11 +1081,8 @@ function _updateBozzaBadge(){
     var toTab=document.getElementById('to');
     var tabAttiva = toTab && toTab.classList.contains('active');
     if(!tabAttiva){
-      showToastGen('blue','📡 Banco: ordine in costruzione!');
       var tbbTo=document.getElementById('tbb-to');
       if(tbbTo){ tbbTo.style.color='#63b3ed'; setTimeout(function(){tbbTo.style.color='';},3000); }
-    } else {
-      showToastGen('blue','📡 Banco: ordine in costruzione!');
     }
   }
   _bozzaBadgeLast = nBozze;
@@ -1166,8 +1133,18 @@ function startAutoRefresh(){
       var toTab=document.getElementById('to');
       if(toTab&&toTab.classList.contains('active')){
         renderOrdini();
+        // Rileva bozze aggiornate (stessa quantità ma contenuto diverso)
+        var freshBozzeIds=fresh.filter(function(o){return o.stato==='bozza';}).map(function(o){return o.id;});
+        var prevBozzeMap={};
+        prev.filter(function(o){return o.stato==='bozza';}).forEach(function(o){prevBozzeMap[o.id]=JSON.stringify(o);});
+        freshBozzeIds.forEach(function(bid){
+          var fb=fresh.find(function(o){return o.id===bid;});
+          if(fb && prevBozzeMap[bid] && prevBozzeMap[bid]!==JSON.stringify(fb)){
+            if(typeof mostraBozzaAggiornata === 'function') mostraBozzaAggiornata(fb);
+          }
+        });
       } else {
-        // Tab non attiva: se è arrivata una bozza nuova, notifica l'ufficio
+        // Tab non attiva: badge e notifica gestiti da _updateBozzaBadge()
         var nuoveBozze=fresh.filter(function(o){return o.stato==='bozza';}).length;
         if(nuoveBozze>prevBozze){
           var tbbTo=document.getElementById('tbb-to');
@@ -1175,7 +1152,11 @@ function startAutoRefresh(){
             tbbTo.style.color='#63b3ed';
             setTimeout(function(){tbbTo.style.color='';},3000);
           }
-          showToastGen('blue','📡 Banco: ordine in costruzione!');
+          // Notifica browser + modal per bozza
+          var bozzeArr=fresh.filter(function(o){return o.stato==='bozza';});
+          if(bozzeArr.length && typeof mostraNotificaBozza === 'function'){
+            mostraNotificaBozza(bozzeArr[0]);
+          }
         }
       }
       // Notifica sonora per nuovi ordini normali

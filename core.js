@@ -192,23 +192,11 @@ function numpadConfirm(){
 
 
 // ══ SALVATAGGIO SINGOLO ARTICOLO SU FIREBASE ═════════════════════
-// Salva l'articolo modificato CON i dati magazzino (qty, prezzoAcquisto, ecc.)
-// Così su Firebase ogni articolo ha TUTTI i campi — backup completo
-var _MAG_FIELDS = ['qty','unit','soglia','prezzoAcquisto','marca','specs',
-                   'posizione','cat','subcat','nomeFornitore'];
-
+// Salva solo l'articolo modificato (non tutti i 14.000)
 function _fbSaveArticolo(idx){
   if(!_fbReady || !_fbDb || !rows[idx]) return;
   try{
-    // Fonde rows[idx] + magazzino[idx] in un unico oggetto per Firebase
-    var obj = JSON.parse(JSON.stringify(rows[idx])); // clone
-    var m = magazzino[idx];
-    if(m){
-      _MAG_FIELDS.forEach(function(f){
-        if(m[f] !== undefined && m[f] !== '') obj['_m_' + f] = m[f];
-      });
-    }
-    _fbDb.ref(MAGEXT_K + '/' + idx).set(obj);
+    _fbDb.ref(MAGEXT_K + '/' + idx).set(rows[idx]);
   }catch(e){ console.error('Firebase save articolo:', e); }
 }
 
@@ -267,7 +255,9 @@ document.addEventListener('DOMContentLoaded', function(){
     _initAccountBusyListener();
     // Snapshot degli ID gi- presenti PRIMA di connettersi - cos- al primo sync non scattano notifiche
     var _idKnown={};
-    ordini.forEach(function(o){if(o&&o.id)_idKnown[o.id]=true;});
+    var _bozzaKnown={};
+    var _bozzaSnap={}; // snapshot JSON delle bozze per rilevare aggiornamenti
+    ordini.forEach(function(o){if(o&&o.id){_idKnown[o.id]=true; if(o.stato==='bozza'){_bozzaKnown[o.id]=true; _bozzaSnap[o.id]=JSON.stringify(o);}}});
     var _first=true;
     _fbDb.ref('ordini').on('value',function(snap){
       if(_fbSyncing)return;
@@ -275,7 +265,7 @@ document.addEventListener('DOMContentLoaded', function(){
       var fresh=_fbFix(d);
       // Aggiorna sempre _idKnown al primo sync (prima di confrontare)
       if(_first){
-        fresh.forEach(function(o){if(o&&o.id)_idKnown[o.id]=true;});
+        fresh.forEach(function(o){if(o&&o.id){_idKnown[o.id]=true; if(o.stato==='bozza'){_bozzaKnown[o.id]=true; _bozzaSnap[o.id]=JSON.stringify(o);}}});
         _first=false;
       }
       if(JSON.stringify(fresh)===JSON.stringify(ordini))return;
@@ -293,6 +283,25 @@ document.addEventListener('DOMContentLoaded', function(){
         }
         // Aggiorna _idKnown anche per ordini non-nuovi appena arrivati
         fresh.forEach(function(o){if(o&&o.id)_idKnown[o.id]=true;});
+        // Bozze nuove — notifica browser + modal (come per gli ordini normali)
+        var nuoveBozze=fresh.filter(function(o){return o.stato==='bozza'&&!_bozzaKnown[o.id];});
+        if(nuoveBozze.length){
+          nuoveBozze.forEach(function(o){_bozzaKnown[o.id]=true; _bozzaSnap[o.id]=JSON.stringify(o);});
+          if(typeof mostraNotificaBozza === 'function'){
+            mostraNotificaBozza(nuoveBozze[nuoveBozze.length-1]);
+          }
+        }
+        // Bozze aggiornate — toast in-app per chi sta nella tab ordini
+        fresh.forEach(function(o){
+          if(o.stato==='bozza' && _bozzaKnown[o.id]){
+            var newSnap=JSON.stringify(o);
+            if(_bozzaSnap[o.id] && _bozzaSnap[o.id]!==newSnap){
+              _bozzaSnap[o.id]=newSnap;
+              if(typeof mostraBozzaAggiornata === 'function') mostraBozzaAggiornata(o);
+            }
+            _bozzaSnap[o.id]=newSnap;
+          }
+        });
       }catch(e){console.error('FB ordini:',e);}
       setTimeout(function(){_fbSyncing=false;},500);
     });
@@ -409,36 +418,13 @@ function loadMagazzinoFB(){
     var keys = Object.keys(d);
     var total = keys.length;
     var arr = [];
-    var magFromFB = {}; // campi magazzino estratti da Firebase
     var pos = 0;
     var CHUNK = 500;
     function nextChunk(){
       var end = Math.min(pos + CHUNK, total);
       for(var i = pos; i < end; i++){
         var v = d[keys[i]];
-        if(v != null){
-          var arrIdx = arr.length;
-          // Estrai campi _m_* → magazzino[arrIdx], rimuovili da rows
-          var mData = {};
-          var hasMag = false;
-          _MAG_FIELDS.forEach(function(f){
-            var fbKey = '_m_' + f;
-            if(v[fbKey] !== undefined){
-              mData[f] = v[fbKey];
-              delete v[fbKey]; // non inquina rows[]
-              hasMag = true;
-            }
-          });
-          if(hasMag){
-            // Fonde con dati già in localStorage (localStorage ha priorità per campi non su FB)
-            var existing = magazzino[arrIdx] || {};
-            _MAG_FIELDS.forEach(function(f){
-              if(mData[f] !== undefined) existing[f] = mData[f];
-            });
-            magFromFB[arrIdx] = existing;
-          }
-          arr.push(v);
-        }
+        if(v != null) arr.push(v);
       }
       pos = end;
       if(pos < total){
@@ -450,19 +436,6 @@ function loadMagazzinoFB(){
         setTimeout(nextChunk, 0);
       } else {
         rows = arr;
-        // Applica i dati magazzino da Firebase (sovrascrive localStorage se presenti)
-        var magKeys = Object.keys(magFromFB);
-        if(magKeys.length){
-          magKeys.forEach(function(k){
-            var idx = parseInt(k);
-            if(!magazzino[idx]) magazzino[idx] = {};
-            var fbM = magFromFB[k];
-            _MAG_FIELDS.forEach(function(f){
-              if(fbM[f] !== undefined) magazzino[idx][f] = fbM[f];
-            });
-          });
-          lsSet(MAGK, magazzino);
-        }
         _tableShowAll = false;
         _filterIndices = null;
         // Invalida l'indice vecchio e ne costruisce uno nuovo in background
@@ -603,15 +576,16 @@ var AUTH_K = 'cp4_auth';
 var _currentUser = null;
 
 // Ruoli e permessi
+var _defaultColors = { prop1:'#f5c400', prop2:'#f5c400', comm1:'#63b3ed', comm2:'#68d391' };
 var _roles = {
-  prop1: { nome:'Proprietario 1', ruolo:'proprietario', pin:'', tabs:'*' },
-  prop2: { nome:'Proprietario 2', ruolo:'proprietario', pin:'', tabs:'*' },
-  comm1: { nome:'Commesso 1', ruolo:'commesso', pin:'',
+  prop1: { nome:'Proprietario 1', ruolo:'proprietario', pin:'', colore:'#f5c400', tabs:'*' },
+  prop2: { nome:'Proprietario 2', ruolo:'proprietario', pin:'', colore:'#f5c400', tabs:'*' },
+  comm1: { nome:'Commesso 1', ruolo:'commesso', pin:'', colore:'#63b3ed',
     tabs:['tc','to','t0','t11','t10','t1','t7','t9','t-ordfor'],
     altro:['atb-t11','atb-t10','atb-t12'],
     bottom:['tbb-tc','tbb-to','tbb-t0','tbb-t1','tbb-taltro']
   },
-  comm2: { nome:'Commesso 2', ruolo:'commesso', pin:'',
+  comm2: { nome:'Commesso 2', ruolo:'commesso', pin:'', colore:'#68d391',
     tabs:['tc','to','t0','t11','t10','t1','t7','t9','t-ordfor'],
     altro:['atb-t11','atb-t10','atb-t12'],
     bottom:['tbb-tc','tbb-to','tbb-t0','tbb-t1','tbb-taltro']
@@ -626,6 +600,7 @@ function _authLoad(){
       if(_roles[k]){
         if(saved[k].pin) _roles[k].pin = saved[k].pin;
         if(saved[k].nome) _roles[k].nome = saved[k].nome;
+        if(saved[k].colore) _roles[k].colore = saved[k].colore;
       }
     });
   }
@@ -638,11 +613,18 @@ function _authLoad(){
           if(_roles[k]){
             if(d[k].pin) _roles[k].pin = d[k].pin;
             if(d[k].nome) _roles[k].nome = d[k].nome;
+            if(d[k].colore) _roles[k].colore = d[k].colore;
           }
         });
         _authSaveLocal();
         // Aggiorna nomi sulla schermata login se visibile
         _authRenderLogin();
+        // Aggiorna header se loggato (potrebbe aver cambiato nome/colore da altro device)
+        if(_currentUser && _roles[_currentUser.key]){
+          _currentUser.nome = _roles[_currentUser.key].nome;
+          _currentUser.colore = _roles[_currentUser.key].colore;
+          _authUpdateHeader();
+        }
       }
     });
   }
@@ -651,7 +633,7 @@ function _authLoad(){
 function _authSaveLocal(){
   var data = {};
   Object.keys(_roles).forEach(function(k){
-    data[k] = { pin: _roles[k].pin, nome: _roles[k].nome };
+    data[k] = { pin: _roles[k].pin, nome: _roles[k].nome, colore: _roles[k].colore || '' };
   });
   lsSet(AUTH_K, data);
 }
@@ -661,7 +643,7 @@ function _authSaveFirebase(){
   if(_fbReady && _fbDb){
     var data = {};
     Object.keys(_roles).forEach(function(k){
-      data[k] = { pin: _roles[k].pin, nome: _roles[k].nome };
+      data[k] = { pin: _roles[k].pin, nome: _roles[k].nome, colore: _roles[k].colore || '' };
     });
     try{ _fbDb.ref('auth').set(data); }catch(e){}
   }
@@ -690,12 +672,20 @@ function _authRenderLogin(){
   Object.keys(_roles).forEach(function(k){
     var r = _roles[k];
     var icon = r.ruolo === 'proprietario' ? '👑' : '👤';
-    var color = r.ruolo === 'proprietario' ? 'var(--accent)' : '#888';
-    h += '<button onclick="_authSelectUser(\''+k+'\')" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px 18px;margin-bottom:8px;border-radius:12px;border:1px solid #2a2a2a;background:#1a1a1a;cursor:pointer;touch-action:manipulation;text-align:left;">';
+    var col = r.colore || (r.ruolo === 'proprietario' ? '#f5c400' : '#888');
+    h += '<div style="display:flex;gap:6px;margin-bottom:8px;align-items:stretch;">';
+    // Pulsante account
+    h += '<button onclick="_authSelectUser(\''+k+'\')" style="display:flex;align-items:center;gap:12px;flex:1;padding:14px 18px;border-radius:12px;border:1px solid #2a2a2a;background:#1a1a1a;cursor:pointer;touch-action:manipulation;text-align:left;">';
     h += '<span style="font-size:24px;">'+icon+'</span>';
-    h += '<div style="flex:1"><div style="font-size:14px;font-weight:800;color:'+color+';">'+esc(r.nome)+'</div>';
+    h += '<div style="flex:1"><div style="font-size:14px;font-weight:800;color:'+col+';">'+esc(r.nome)+'</div>';
     h += '<div style="font-size:10px;color:#555;text-transform:uppercase;">'+r.ruolo+'</div></div>';
+    h += '<div style="width:8px;height:8px;border-radius:50%;background:'+col+';align-self:center;"></div>';
     h += '</button>';
+    // Tasto modifica (solo se ha PIN, quindi account configurato)
+    if(r.pin){
+      h += '<button onclick="_authEditAccount(\''+k+'\')" style="padding:0 12px;border-radius:12px;border:1px solid #2a2a2a;background:#1a1a1a;cursor:pointer;color:#666;font-size:16px;" title="Modifica account">⚙️</button>';
+    }
+    h += '</div>';
   });
   
   h += '</div>';
@@ -756,11 +746,12 @@ function _authPinKey(k){
     var key = ov._authKey;
     var r = _roles[key];
     if(_authPinBuffer === r.pin){
-      // Login OK
-      _currentUser = { key:key, nome:r.nome, ruolo:r.ruolo };
+      // Login OK — salva sessione per auto-login al refresh
+      _currentUser = { key:key, nome:r.nome, ruolo:r.ruolo, colore:r.colore||'' };
       _deviceName = r.nome;
       localStorage.setItem('cp4_deviceName', r.nome);
       localStorage.setItem('cp4_lastUser', key);
+      _authSaveSession(key);
       ov.style.display = 'none';
       _authApplyRole();
       _authUpdateHeader();
@@ -799,13 +790,131 @@ function _authSetupPin(key){
   _authRenderLogin();
 }
 
+// ── Modifica Account (nome + colore) ──────────────────────────────────────
+var _authColorPalette = [
+  '#f5c400','#f6ad55','#fc8181','#e53e3e','#f687b3','#d53f8c',
+  '#b794f4','#805ad5','#63b3ed','#3182ce','#4fd1c5','#38b2ac',
+  '#68d391','#38a169','#a0aec0','#e2e8f0'
+];
+
+function _authEditAccount(key){
+  var r = _roles[key];
+  if(!r) return;
+  var ov = document.getElementById('auth-login-ov');
+  if(!ov) return;
+
+  var col = r.colore || _defaultColors[key] || '#aaa';
+
+  var h = '<div style="text-align:center;max-width:340px;width:90%;">';
+  h += '<div style="font-size:18px;font-weight:900;color:'+col+';margin-bottom:4px;">⚙️ Modifica Account</div>';
+  h += '<div style="font-size:10px;color:#555;text-transform:uppercase;margin-bottom:24px;">'+r.ruolo+'</div>';
+
+  // Nome
+  h += '<div style="text-align:left;margin-bottom:16px;">';
+  h += '<label style="font-size:11px;color:#888;font-weight:700;display:block;margin-bottom:6px;">NOME</label>';
+  h += '<input id="auth-edit-nome" type="text" value="'+esc(r.nome)+'" maxlength="20" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid #333;background:#1a1a1a;color:#fff;font-size:15px;font-weight:700;box-sizing:border-box;">';
+  h += '</div>';
+
+  // Colore
+  h += '<div style="text-align:left;margin-bottom:20px;">';
+  h += '<label style="font-size:11px;color:#888;font-weight:700;display:block;margin-bottom:8px;">COLORE</label>';
+  h += '<div id="auth-color-grid" style="display:grid;grid-template-columns:repeat(8,1fr);gap:6px;">';
+  _authColorPalette.forEach(function(c){
+    var sel = (c.toLowerCase() === col.toLowerCase());
+    h += '<div onclick="_authPickColor(\''+c+'\')" style="width:100%;aspect-ratio:1;border-radius:50%;background:'+c+';cursor:pointer;border:3px solid '+(sel?'#fff':'transparent')+';box-sizing:border-box;transition:border .15s;"></div>';
+  });
+  h += '</div>';
+  h += '<div id="auth-color-preview" style="margin-top:10px;text-align:center;font-size:16px;font-weight:900;color:'+col+';">'+esc(r.nome)+'</div>';
+  h += '</div>';
+
+  // Pulsanti
+  h += '<div style="display:flex;gap:10px;margin-top:8px;">';
+  h += '<button onclick="_authBack()" style="flex:1;padding:12px;border-radius:10px;border:1px solid #333;background:transparent;color:#888;font-size:13px;cursor:pointer;">← Indietro</button>';
+  h += '<button onclick="_authSaveEdit(\''+key+'\')" style="flex:1;padding:12px;border-radius:10px;border:none;background:#38a169;color:#fff;font-size:13px;font-weight:800;cursor:pointer;">✅ Salva</button>';
+  h += '</div>';
+
+  h += '</div>';
+  ov.innerHTML = h;
+
+  // Salva key e colore corrente
+  ov._editKey = key;
+  ov._editColor = col;
+}
+
+function _authPickColor(c){
+  var ov = document.getElementById('auth-login-ov');
+  if(!ov) return;
+  ov._editColor = c;
+
+  // Aggiorna bordi pallini
+  var dots = document.querySelectorAll('#auth-color-grid > div');
+  dots.forEach(function(d){
+    d.style.borderColor = (d.style.background === c || d.style.backgroundColor === c) ? '#fff' : 'transparent';
+  });
+  // Workaround: match per valore esatto
+  dots.forEach(function(d){
+    var bg = d.style.background || d.style.backgroundColor;
+    // Normalizza hex
+    var match = (bg.toLowerCase().replace(/\s/g,'') === c.toLowerCase().replace(/\s/g,''));
+    if(!match){
+      // Prova rgb
+      var tmpDiv = document.createElement('div');
+      tmpDiv.style.color = c;
+      document.body.appendChild(tmpDiv);
+      var rgb = getComputedStyle(tmpDiv).color;
+      document.body.removeChild(tmpDiv);
+      match = (bg === rgb);
+    }
+    d.style.borderColor = match ? '#fff' : 'transparent';
+  });
+
+  // Preview
+  var prev = document.getElementById('auth-color-preview');
+  if(prev){
+    prev.style.color = c;
+    var inp = document.getElementById('auth-edit-nome');
+    if(inp) prev.textContent = inp.value || '...';
+  }
+}
+
+function _authSaveEdit(key){
+  var ov = document.getElementById('auth-login-ov');
+  if(!ov) return;
+  var r = _roles[key];
+  if(!r) return;
+
+  var inp = document.getElementById('auth-edit-nome');
+  var newNome = inp ? inp.value.trim() : r.nome;
+  if(!newNome){ showToastGen('red','Inserisci un nome'); return; }
+
+  var newColore = ov._editColor || r.colore;
+
+  r.nome = newNome;
+  r.colore = newColore;
+
+  // Se è l'utente attualmente loggato, aggiorna anche _currentUser
+  if(_currentUser && _currentUser.key === key){
+    _currentUser.nome = newNome;
+    _currentUser.colore = newColore;
+    _deviceName = newNome;
+    localStorage.setItem('cp4_deviceName', newNome);
+    _authUpdateHeader();
+  }
+
+  _authSaveFirebase();
+  showToastGen('green','Account aggiornato!');
+  _authRenderLogin();
+}
+
 // Applica visibilità tab in base al ruolo
 function _authUpdateHeader(){
   var el = document.getElementById('app-header-subtitle');
   if(!el) return;
   if(_currentUser){
+    var role = _roles[_currentUser.key];
+    var col = (role && role.colore) ? role.colore : (_currentUser.ruolo === 'proprietario' ? '#f5c400' : '#aaa');
     el.textContent = _currentUser.nome;
-    el.style.color = (_currentUser.ruolo === 'proprietario') ? 'var(--accent)' : '#aaa';
+    el.style.color = col;
   } else {
     el.textContent = 'Cartellini Prezzi';
     el.style.color = '';
@@ -849,112 +958,51 @@ function _authApplyRole(){
   if(themeBtn) themeBtn.style.display = '';
 }
 
-// Auto-login se ultimo utente salvato
+// Auto-login se sessione attiva salvata
+var _AUTH_SESSION_K = 'cp4_auth_session';
+
 function _authInit(){
   _authLoad();
-  var last = localStorage.getItem('cp4_lastUser');
-  if(last && _roles[last] && _roles[last].pin){
-    // Mostra login con ultimo utente pre-selezionato
-    _authShowLogin();
-  } else {
-    _authShowLogin();
-  }
-}
 
-
-// ══ ESPORTA DATABASE CSV ══════════════════════════════════════════
-// Scarica un file CSV con tutti gli articoli e i dati magazzino
-function esportaDatabaseCSV(){
-  if(!rows || !rows.length){ showToastGen('red','❌ Database vuoto'); return; }
-
-  var sep = ';';
-  var headers = ['Descrizione','CodMagazzino','CodFornitore','Prezzo','PrezzoOld1','PrezzoOld2','PrezzoOld3','PrezzoAcquisto','Quantita','Unita','Marca','Fornitore'];
-  var csvLines = [headers.join(sep)];
-
-  rows.forEach(function(r, i){
-    if(!r) return;
-    var m = magazzino[i] || {};
-    // Storico prezzi: prende da priceHistory (max 3)
-    var ph = r.priceHistory || [];
-    var old1 = r.prezzoOld || (ph[0] ? ph[0].prezzo : '') || '';
-    var old2 = (ph.length > 0 && r.prezzoOld) ? (ph[0] ? ph[0].prezzo : '') : (ph[1] ? ph[1].prezzo : '') || '';
-    var old3 = '';
-    // Logica semplice: prezzoOld è il più recente, poi priceHistory[0], [1]
-    if(r.prezzoOld){
-      old1 = r.prezzoOld;
-      old2 = ph[0] ? ph[0].prezzo : '';
-      old3 = ph[1] ? ph[1].prezzo : '';
-    } else {
-      old1 = ph[0] ? ph[0].prezzo : '';
-      old2 = ph[1] ? ph[1].prezzo : '';
-      old3 = ph[2] ? ph[2].prezzo : '';
-    }
-
-    var cols = [
-      (r.desc || '').replace(/;/g, ','),
-      r.codM || '',
-      r.codF || '',
-      r.prezzo || '',
-      old1,
-      old2,
-      old3,
-      m.prezzoAcquisto || '',
-      m.qty !== undefined && m.qty !== '' ? String(m.qty) : '',
-      m.unit || 'pz',
-      m.marca || '',
-      m.nomeFornitore || ''
-    ];
-    csvLines.push(cols.join(sep));
-  });
-
-  var csvContent = '\uFEFF' + csvLines.join('\n'); // BOM per Excel italiano
-  var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  var oggi = new Date().toISOString().slice(0,10);
-  a.href = url;
-  a.download = 'rattazzi_database_' + oggi + '.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  showToastGen('green', '✅ ' + rows.length + ' articoli esportati!');
-}
-
-
-// ══ SYNC BATCH: salva TUTTI gli articoli con dati magazzino su Firebase ══════
-// Utile per la prima volta o per forzare un backup completo
-function fbSyncTuttoMagazzino(){
-  if(!_fbReady || !_fbDb || !rows.length){
-    showToastGen('red','❌ Firebase non pronto o database vuoto');
+  // Controlla se c'è una sessione attiva salvata
+  var session = lsGet(_AUTH_SESSION_K, null);
+  if(session && session.key && _roles[session.key] && _roles[session.key].pin){
+    // Auto-login — salta la schermata PIN
+    _currentUser = { key: session.key, nome: _roles[session.key].nome, ruolo: _roles[session.key].ruolo, colore: _roles[session.key].colore||'' };
+    _deviceName = _currentUser.nome;
+    localStorage.setItem('cp4_deviceName', _currentUser.nome);
+    _authApplyRole();
+    _authUpdateHeader();
+    // Nascondi overlay login se presente
+    var ov = document.getElementById('auth-login-ov');
+    if(ov) ov.style.display = 'none';
     return;
   }
 
-  var totale = rows.length;
-  var updates = {};
-  var count = 0;
+  // Nessuna sessione — mostra login
+  _authShowLogin();
+}
 
-  rows.forEach(function(r, idx){
-    if(!r) return;
-    var obj = JSON.parse(JSON.stringify(r));
-    var m = magazzino[idx];
-    if(m){
-      _MAG_FIELDS.forEach(function(f){
-        if(m[f] !== undefined && m[f] !== '') obj['_m_' + f] = m[f];
-      });
-    }
-    updates[MAGEXT_K + '/' + idx] = obj;
-    count++;
-  });
+function _authSaveSession(key){
+  lsSet(_AUTH_SESSION_K, { key: key, at: new Date().toISOString() });
+}
 
-  showToastGen('blue', '⏳ Caricamento ' + count + ' articoli su Firebase...');
+function _authClearSession(){
+  localStorage.removeItem(_AUTH_SESSION_K);
+}
 
-  _fbDb.ref().update(updates, function(err){
-    if(err){
-      showToastGen('red', '❌ Errore: ' + err.message);
-    } else {
-      showToastGen('green', '✅ ' + count + ' articoli sincronizzati su Firebase con dati magazzino!');
-    }
-  });
+function authLogout(){
+  _authClearSession();
+  _currentUser = null;
+  _authUpdateHeader();
+  // Ripristina visibilità di tutte le tab (reset permessi)
+  var allBottom = document.querySelectorAll('.tab-bottom-btn');
+  allBottom.forEach(function(btn){ btn.style.display = ''; });
+  var allAltro = document.querySelectorAll('.altro-btn');
+  allAltro.forEach(function(btn){ btn.style.display = ''; });
+  // Chiudi menu Altro se aperto
+  if(typeof closeAltroMenu === 'function') closeAltroMenu();
+  // Mostra login
+  _authShowLogin();
+  showToastGen('blue','👋 Disconnesso');
 }
