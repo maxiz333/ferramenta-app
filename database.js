@@ -1749,7 +1749,7 @@ function searchHistory(){
 }
 
 // -- EDITOR CARTELLINI -------------------
-var editorSettings={priceColor:'#000000',borderColor:'#aaaaaa',smW:67,smH:38,lgW:94,lgH:39,barrato:false};
+var editorSettings={priceColor:'#000000',borderColor:'#aaaaaa',smW:67,smH:38,lgW:94,lgH:39,barrato:false,priceFontSm:26,priceFontLg:32,promoFont:6,oldPriceFont:10,borderWidth:0.5,tagShape:'',tagFrame:'',frameColor:'#aaaaaa',promoText:'PROMO',tagBg:'#ffffff'};
 
 function loadEditorSettings(){
   var s=lsGet('cp4_editor',null);
@@ -1761,6 +1761,36 @@ function loadEditorSettings(){
   document.getElementById('ec-lg-w').value=editorSettings.lgW;
   document.getElementById('ec-lg-h').value=editorSettings.lgH;
   document.getElementById('ec-barrato').checked=editorSettings.barrato;
+  document.getElementById('ec-price-font-sm').value=editorSettings.priceFontSm||26;
+  document.getElementById('ec-price-font-sm-val').textContent=(editorSettings.priceFontSm||26)+'pt';
+  document.getElementById('ec-price-font-lg').value=editorSettings.priceFontLg||32;
+  document.getElementById('ec-price-font-lg-val').textContent=(editorSettings.priceFontLg||32)+'pt';
+  document.getElementById('ec-promo-font').value=editorSettings.promoFont||6;
+  document.getElementById('ec-promo-font-val').textContent=(editorSettings.promoFont||6)+'pt';
+  document.getElementById('ec-oldprice-font').value=editorSettings.oldPriceFont||10;
+  document.getElementById('ec-oldprice-font-val').textContent=(editorSettings.oldPriceFont||10)+'pt';
+  document.getElementById('ec-border-width').value=editorSettings.borderWidth||0.5;
+  document.getElementById('ec-border-width-val').textContent=(editorSettings.borderWidth||0.5)+'px';
+  document.getElementById('ec-frame-color').value=editorSettings.frameColor||'#aaaaaa';
+  // Shape buttons
+  document.querySelectorAll('.ec-shape-btn').forEach(function(b){
+    b.classList.toggle('active',b.dataset.shape===(editorSettings.tagShape||''));
+  });
+  // Frame buttons
+  document.querySelectorAll('.ec-frame-btn').forEach(function(b){
+    b.classList.toggle('active',b.dataset.frame===(editorSettings.tagFrame||''));
+  });
+  // Promo text
+  var pt=editorSettings.promoText||'PROMO';
+  document.getElementById('ec-promo-text').value=pt;
+  document.querySelectorAll('.ec-promo-txt-btn').forEach(function(b){
+    b.style.borderColor=b.dataset.val===pt?'#e53e3e':'';
+  });
+  // Background
+  var bg=editorSettings.tagBg||'#ffffff';
+  document.querySelectorAll('.ec-bg-btn').forEach(function(b){
+    b.style.borderColor=b.dataset.val===bg?'var(--accent)':'var(--border)';
+  });
 }
 
 function applyEditor(){
@@ -1771,6 +1801,12 @@ function applyEditor(){
   editorSettings.lgW=parseInt(document.getElementById('ec-lg-w').value)||94;
   editorSettings.lgH=parseInt(document.getElementById('ec-lg-h').value)||39;
   editorSettings.barrato=document.getElementById('ec-barrato').checked;
+  editorSettings.priceFontSm=parseInt(document.getElementById('ec-price-font-sm').value)||26;
+  editorSettings.priceFontLg=parseInt(document.getElementById('ec-price-font-lg').value)||32;
+  editorSettings.promoFont=parseInt(document.getElementById('ec-promo-font').value)||6;
+  editorSettings.oldPriceFont=parseInt(document.getElementById('ec-oldprice-font').value)||10;
+  editorSettings.borderWidth=parseFloat(document.getElementById('ec-border-width').value)||0.5;
+  editorSettings.frameColor=document.getElementById('ec-frame-color').value;
   lsSet('cp4_editor',editorSettings);
   applyEditorCSS();
   renderEditorPreview();
@@ -1782,20 +1818,110 @@ function applyEditorCSS(){
   if(!s){s=document.createElement('style');s.id='editor-style';document.head.appendChild(s);}
   var smW=editorSettings.smW, smH=editorSettings.smH;
   var lgW=editorSettings.lgW, lgH=editorSettings.lgH;
-  // Rapporto d'aspetto calcolato dai valori reali in mm
   var smRatio=(smW/smH).toFixed(4);
   var lgRatio=(lgW/lgH).toFixed(4);
+  var bw=(editorSettings.borderWidth||0.5)+'px';
+  var pFSm=(editorSettings.priceFontSm||26)+'pt';
+  var pFLg=(editorSettings.priceFontLg||32)+'pt';
+  var oldF=(editorSettings.oldPriceFont||10)+'pt';
+  var oldFLg=((editorSettings.oldPriceFont||10)+2)+'pt';
+  var frameColor=editorSettings.frameColor||'#aaaaaa';
+  var shape=editorSettings.tagShape||'';
+  var frame=editorSettings.tagFrame||'';
+
+  // Promo ribbon — scala proporzionalmente al font
+  var pf=editorSettings.promoFont||6;
+  // small tag ribbon
+  var smRibW=Math.round(pf*3.6)+'mm';
+  var smRibPad=Math.max(0.6,pf*0.17).toFixed(1)+'mm';
+  var smRibTop=Math.round(smH*0.12)+'mm';
+  var smRibRight=Math.round(pf*-1)+'mm';
+  // large tag ribbon
+  var lgRibW=Math.round(pf*4.2)+'mm';
+  var lgRibPad=Math.max(0.8,pf*0.2).toFixed(1)+'mm';
+  var lgRibTop=Math.round(lgH*0.13)+'mm';
+  var lgRibRight=Math.round(pf*-1.1)+'mm';
+
+  // Shape CSS
+  var shapeCSS='';
+  if(shape==='rounded') shapeCSS='.tag-small,.tag-large{border-radius:4mm!important;}';
+  else if(shape==='pill') shapeCSS='.tag-small,.tag-large{border-radius:12mm!important;}';
+  else if(shape==='ticket') shapeCSS='.tag-small,.tag-large{border-radius:2mm!important;}';
+
+  // Frame CSS
+  var frameCSS='';
+  if(frame==='double') frameCSS='.tag-small,.tag-large{outline:1px solid '+frameColor+';outline-offset:-2.5mm;}';
+  else if(frame==='dotted') frameCSS='.tag-small,.tag-large{outline:1.5px dotted '+frameColor+';outline-offset:-2mm;}';
+  else if(frame==='elegant') frameCSS='.tag-small,.tag-large{outline:0.8px solid '+frameColor+';outline-offset:-2mm;box-shadow:inset 0 0 0 1mm #fff,inset 0 0 0 1.4mm '+frameColor+';}';
+  else if(frame==='deco') frameCSS='.tag-small,.tag-large{outline:1.2px solid '+frameColor+';outline-offset:-1.8mm;}.tag-small::after,.tag-large::after{content:\'\';position:absolute;inset:2.5mm;border:0.4px solid '+frameColor+';pointer-events:none;}';
+
+  // Promo label style (corner badge vs ribbon depending on shape)
+  var promoCSS='';
+  if(shape==='pill'||shape==='rounded'){
+    // Corner badge — no rotation, sits inside top-right
+    promoCSS=
+      '.tag-small.cp::before,.tag-large.cp::before{'+
+        'transform:none!important;'+
+        'width:auto!important;'+
+        'padding:0.8mm 2.5mm!important;'+
+        'top:1.5mm!important;right:1.5mm!important;'+
+        'border-radius:3mm!important;'+
+        'letter-spacing:0.8px!important;'+
+      '}'+
+      '.tag-small.cp::before{font-size:'+pf+'pt!important;}'+
+      '.tag-large.cp::before{font-size:'+(pf+1)+'pt!important;}';
+  } else {
+    // Classic diagonal ribbon — scaled
+    promoCSS=
+      '.tag-small.cp::before{'+
+        'font-size:'+pf+'pt!important;'+
+        'width:'+smRibW+'!important;'+
+        'padding:'+smRibPad+' 0!important;'+
+        'top:'+smRibTop+'!important;'+
+        'right:'+smRibRight+'!important;'+
+      '}'+
+      '.tag-large.cp::before{'+
+        'font-size:'+(pf+1)+'pt!important;'+
+        'width:'+lgRibW+'!important;'+
+        'padding:'+lgRibPad+' 0!important;'+
+        'top:'+lgRibTop+'!important;'+
+        'right:'+lgRibRight+'!important;'+
+      '}';
+  }
+
+  // Promo text override
+  var promoTxt=editorSettings.promoText||'PROMO';
+  // Escape single quotes for CSS content
+  var promoTxtCSS=promoTxt.replace(/'/g,"\\'");
+  var promoContentCSS='.tag-small.cp::before,.tag-large.cp::before{content:\''+promoTxtCSS+'\'!important;}';
+
+  // Tag background
+  var tagBg=editorSettings.tagBg||'#ffffff';
+  var bgCSS=tagBg!=='#ffffff'?'.tag-small,.tag-large{background:'+tagBg+'!important;}':'';
+
   s.textContent=
-    // Bordo e colore prezzo
-    '.tag-small,.tag-large{border-color:'+editorSettings.borderColor+'!important;}'+
+    // Base
+    '.tag-small,.tag-large{border-color:'+editorSettings.borderColor+'!important;border-width:'+bw+'!important;--frame-color:'+frameColor+';overflow:hidden!important;}'+
     '.tpr{color:'+editorSettings.priceColor+'!important;}'+
-    // Dimensioni reali mm per stampa e anteprima
     '.tag-small{width:'+smW+'mm!important;height:'+smH+'mm!important;aspect-ratio:'+smRatio+'!important;}'+
     '.tag-large{width:'+lgW+'mm!important;height:'+lgH+'mm!important;aspect-ratio:'+lgRatio+'!important;}'+
-    // Prezzo centrato e non tocca i bordi
     '.tpa{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:.5mm;padding:0 2mm;}'+
     '.tpr{display:block;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'+
-    // Stampa: forza mm reali
+    // Font sizes
+    '.tag-small .tpr{font-size:'+pFSm+'!important;}'+
+    '.tag-large .tpr{font-size:'+pFLg+'!important;}'+
+    '.tag-small .top2{font-size:'+oldF+'!important;}'+
+    '.tag-large .top2{font-size:'+oldFLg+'!important;}'+
+    // Promo ribbon
+    promoCSS+
+    // Promo text + bg
+    promoContentCSS+
+    bgCSS+
+    // Shape
+    shapeCSS+
+    // Frame
+    frameCSS+
+    // Stampa
     '@media print{'+
       '.tag-small{width:'+smW+'mm!important;height:'+smH+'mm!important;max-width:'+smW+'mm!important;max-height:'+smH+'mm!important;}'+
       '.tag-large{width:'+lgW+'mm!important;height:'+lgH+'mm!important;max-width:'+lgW+'mm!important;max-height:'+lgH+'mm!important;}'+
@@ -1806,16 +1932,69 @@ function renderEditorPreview(){
   var prev=document.getElementById('ec-preview');
   if(!prev) return;
   var sample=[
-    {data:'09-03-2026',desc:'Esempio Articolo',codF:'00020-13/8',codM:'0329013',prezzoOld:'5,00',prezzo:'3,20',barrato:editorSettings.barrato?'si':'no',promo:'si',size:'small',note:''},
-    {data:'09-03-2026',desc:'Articolo Grande',codF:'04170-14/3',codM:'0308114',prezzoOld:'',prezzo:'139,00',barrato:'no',promo:'no',size:'large',note:''}
+    {data:'09-03-2026',desc:'Esempio Articolo',codF:'00020-13/8',codM:'0329013',prezzoOld:'5,00',prezzo:'3,20',barrato:editorSettings.barrato?'si':'no',promo:'si',size:'small',note:'',giornalino:'rosso'},
+    {data:'09-03-2026',desc:'Articolo Normale',codF:'01234-10/5',codM:'0412005',prezzoOld:'',prezzo:'12,90',barrato:'no',promo:'no',size:'small',note:'',giornalino:''},
+    {data:'09-03-2026',desc:'Articolo Grande',codF:'04170-14/3',codM:'0308114',prezzoOld:'',prezzo:'139,00',barrato:'no',promo:'no',size:'large',note:'',giornalino:''}
   ];
   prev.innerHTML=buildTagsHTML(sample);
 }
 
 function resetEditor(){
-  editorSettings={priceColor:'#000000',borderColor:'#aaaaaa',smW:67,smH:38,lgW:94,lgH:39,barrato:false};
+  editorSettings={priceColor:'#000000',borderColor:'#aaaaaa',smW:67,smH:38,lgW:94,lgH:39,barrato:false,priceFontSm:26,priceFontLg:32,promoFont:6,oldPriceFont:10,borderWidth:0.5,tagShape:'',tagFrame:'',frameColor:'#aaaaaa',promoText:'PROMO',tagBg:'#ffffff'};
   lsSet('cp4_editor',editorSettings);
   loadEditorSettings();
+  applyEditorCSS();
+  renderEditorPreview();
+  genTags();
+}
+
+function ec_setShape(val){
+  editorSettings.tagShape=val;
+  document.querySelectorAll('.ec-shape-btn').forEach(function(b){
+    b.classList.toggle('active',b.dataset.shape===val);
+  });
+  lsSet('cp4_editor',editorSettings);
+  applyEditorCSS();
+  renderEditorPreview();
+  genTags();
+}
+
+function ec_setFrame(val){
+  editorSettings.tagFrame=val;
+  document.querySelectorAll('.ec-frame-btn').forEach(function(b){
+    b.classList.toggle('active',b.dataset.frame===val);
+  });
+  lsSet('cp4_editor',editorSettings);
+  applyEditorCSS();
+  renderEditorPreview();
+  genTags();
+}
+
+function ec_updateSliderVal(sliderId,valId,suffix){
+  var v=document.getElementById(sliderId).value;
+  document.getElementById(valId).textContent=v+(suffix||'');
+  applyEditor();
+}
+
+function ec_setPromoText(val){
+  val=(val||'PROMO').toUpperCase().substring(0,12);
+  editorSettings.promoText=val;
+  document.getElementById('ec-promo-text').value=val;
+  document.querySelectorAll('.ec-promo-txt-btn').forEach(function(b){
+    b.style.borderColor=b.dataset.val===val?'#e53e3e':'';
+  });
+  lsSet('cp4_editor',editorSettings);
+  applyEditorCSS();
+  renderEditorPreview();
+  genTags();
+}
+
+function ec_setBg(val){
+  editorSettings.tagBg=val||'#ffffff';
+  document.querySelectorAll('.ec-bg-btn').forEach(function(b){
+    b.style.borderColor=b.dataset.val===val?'var(--accent)':'var(--border)';
+  });
+  lsSet('cp4_editor',editorSettings);
   applyEditorCSS();
   renderEditorPreview();
   genTags();
