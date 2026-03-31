@@ -1437,10 +1437,8 @@ function cancelImpMag(){
 function confirmImp(){
   // -- Nuovo formato (database + cartellini) --
   if(pendingImportDB&&pendingImportDB.length){
-    var oggi = new Date().toLocaleDateString('it-IT');
-    // 1. Aggiorna/aggiungi al database
+    // 1. Aggiorna/aggiungi al database (base: desc, codM, codF)
     pendingImportDB.forEach(function(r){
-      // Cerca se esiste gi- (per codice magazzino o codice fornitore)
       var existIdx=-1;
       rows.forEach(function(row,i){
         if(removed.has(String(i)))return;
@@ -1449,45 +1447,19 @@ function confirmImp(){
       });
 
       if(existIdx>=0){
-        // Aggiorna esistente
         var old=rows[existIdx];
-        // ── Storico prezzi: se il prezzo cambia, archivia il vecchio ──
-        if(r.pv && r.pv !== old.prezzo && old.prezzo){
-          if(!old.priceHistory) old.priceHistory = [];
-          old.prezzoOld = old.prezzo;
-          old.priceHistory.unshift({ prezzo: old.prezzo, data: old.data || '' });
-          if(old.priceHistory.length > 5) old.priceHistory.length = 5;
-          old.prezzo = r.pv;
-          old.data = oggi;
-          old.size = autoSize(r.pv);
-        } else if(r.pv && !old.prezzo){
-          old.prezzo = r.pv;
-          old.data = oggi;
-          old.size = autoSize(r.pv);
-        }
-        // Aggiorna codice fornitore se fornito
-        if(r.codF) old.codF = r.codF;
+        if(r.pv)old.prezzo=r.pv;
+        old.codF=r.codF||old.codF;
         old.codM=r.codM||old.codM;
         old.desc=r.desc||old.desc;
-        // ── Magazzino: prezzoAcquisto e qty ──
         var m=magazzino[existIdx]||{};
-        if(r.pa && r.pa !== m.prezzoAcquisto){
-          m.prezzoAcquisto = r.pa;
-          m.prezzoAcquistoData = oggi;
-        }
-        if(r.qty > 0){
-          m.qty = r.qty;
-          m.qtyData = oggi;
-        }
+        if(r.qty>0)m.qty=r.qty;
+        if(r.pa)m.prezzoAcquisto=r.pa;
         magazzino[existIdx]=m;
-        // Salva su Firebase
-        if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(existIdx);
       } else {
-        // Aggiungi nuovo
         var newIdx=rows.length;
-        rows.push({desc:r.desc,codF:r.codF||'',codM:r.codM,prezzo:r.pv||'',prezzoOld:'',barrato:'no',promo:'no',size:autoSize(r.pv||'0'),data:oggi,note:'',giornalino:'',priceHistory:[]});
+        rows.push({desc:r.desc,codF:r.codF||'',codM:r.codM,prezzo:r.pv||'',prezzoOld:'',barrato:'no',promo:'no',size:autoSize(r.pv||'0'),data:new Date().toLocaleDateString('it-IT'),note:'',giornalino:''});
         magazzino[newIdx]={qty:r.qty,prezzoAcquisto:r.pa||'',unit:r.unit||'pz'};
-        if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(newIdx);
       }
     });
     lsSet(SK,rows);lsSet(MAGK,magazzino);
@@ -1525,8 +1497,112 @@ function confirmImp(){
 }
 function cancelImp(){pendingImport=[];document.getElementById('imp-prev').style.display='none';var fi=document.getElementById('fi');if(fi)fi.value='';var fi2=document.getElementById('fi-ct');if(fi2)fi2.value='';var ip2=document.getElementById('imp-prev-ct');if(ip2)ip2.style.display='none';}
 function dlTemplate(){
-  var csv='Data;Descrizione;CodFornitore;MioCodice;PrezzoVecchio;PrezzoNuovo;Note\n04-03-2026;Nome articolo;12345-10/1;1234567;5,00;3,90;Ultimi 2 pezzi\n';
-  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));a.download='template_cartellini.csv';a.click();
+  var csv='NomeProdotto;CodiceFornitore;CodiceMagazzino;Quantita;PrezzoAcquisto;PrezzoVendita;Giornalino\nVite 4x40 inox;00020-13/8;0329013;100;1,20;3,50;\nTassello Fischer 8mm;04170-14/3;0308114;50;0,80;2,90;rosso\n';
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));a.download='template_cartellini.csv';a.click();
+}
+
+// ══ SINCRONIZZA CSV → DATABASE ═══════════════════════════════════════════════
+// Prende i dati dal CSV caricato (pendingImportDB) e aggiorna il database:
+// codF, prezzo (con storico max 5), prezzoAcquisto, qty — con data modifica
+function syncCsvAlDatabase(){
+  if(!pendingImportDB || !pendingImportDB.length){
+    showToastGen('red','⚠️ Nessun CSV caricato — carica prima un file');
+    return;
+  }
+  var oggi = new Date().toLocaleDateString('it-IT');
+  var stats = { prezzi:0, codF:0, qty:0, acq:0, nuovi:0 };
+
+  pendingImportDB.forEach(function(r){
+    if(!r.codM && !r.codF) return;
+    // Cerca articolo nel database
+    var dbIdx = -1;
+    for(var i = 0; i < rows.length; i++){
+      if(!rows[i]) continue;
+      if(r.codM && rows[i].codM === r.codM){ dbIdx = i; break; }
+      if(r.codF && rows[i].codF === r.codF){ dbIdx = i; break; }
+    }
+
+    if(dbIdx >= 0){
+      var row = rows[dbIdx];
+      var m = magazzino[dbIdx] || {};
+      var changed = false;
+
+      // 1. Codice fornitore
+      if(r.codF && r.codF !== row.codF){
+        row.codF = r.codF;
+        changed = true;
+        stats.codF++;
+      }
+
+      // 2. Prezzo vendita (con storico)
+      var pv = r.pv || '';
+      if(pv && pv !== row.prezzo){
+        if(row.prezzo){
+          // Archivia prezzo corrente
+          row.prezzoOld = row.prezzo;
+          if(!row.priceHistory) row.priceHistory = [];
+          row.priceHistory.unshift({ prezzo: row.prezzo, data: row.data || '' });
+          if(row.priceHistory.length > 5) row.priceHistory.length = 5;
+        }
+        row.prezzo = pv;
+        row.data = oggi;
+        row.size = (typeof autoSize === 'function') ? autoSize(pv) : row.size;
+        changed = true;
+        stats.prezzi++;
+      }
+
+      // 3. Prezzo acquisto
+      var pa = r.pa || '';
+      if(pa && pa !== (m.prezzoAcquisto||'')){
+        m.prezzoAcquisto = pa;
+        m.prezzoAcquistoData = oggi;
+        changed = true;
+        stats.acq++;
+      }
+
+      // 4. Quantità
+      if(r.qty > 0 && r.qty !== m.qty){
+        m.qty = r.qty;
+        m.qtyData = oggi;
+        changed = true;
+        stats.qty++;
+      }
+
+      if(changed){
+        magazzino[dbIdx] = m;
+        if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(dbIdx);
+      }
+    } else {
+      // Articolo nuovo — aggiungilo al database
+      var newIdx = rows.length;
+      rows.push({
+        desc: r.desc || '', codF: r.codF || '', codM: r.codM || '',
+        prezzo: r.pv || '', prezzoOld: '', barrato:'no', promo:'no',
+        size: (typeof autoSize === 'function') ? autoSize(r.pv||'0') : 'small',
+        data: oggi, note:'', giornalino:'', priceHistory:[]
+      });
+      magazzino[newIdx] = { qty: r.qty||0, prezzoAcquisto: r.pa||'', unit: r.unit||'pz' };
+      if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(newIdx);
+      stats.nuovi++;
+    }
+  });
+
+  lsSet(SK, rows);
+  lsSet(MAGK, magazzino);
+  updateStats(); updateStockBadge();
+
+  // Messaggio riepilogo
+  var parts = [];
+  if(stats.prezzi) parts.push(stats.prezzi + ' prezzi');
+  if(stats.codF) parts.push(stats.codF + ' cod.forn.');
+  if(stats.qty) parts.push(stats.qty + ' quantità');
+  if(stats.acq) parts.push(stats.acq + ' pr.acquisto');
+  if(stats.nuovi) parts.push(stats.nuovi + ' nuovi articoli');
+  if(parts.length){
+    showToastGen('green', '✅ Database aggiornato: ' + parts.join(' · '));
+  } else {
+    showToastGen('yellow', 'Nessuna modifica — i dati erano già aggiornati');
+  }
 }
 
 // Tab primarie (nav bar visibile)

@@ -447,14 +447,13 @@ document.addEventListener('click', function(e){
 
 // ── Integrazione con import CSV ──────────────────────────────────────────────
 // Override di confirmImp: il CSV aggiunge ai cartellini (ctRows)
-// e aggiorna il database: codF, prezzo (con storico), prezzoAcquisto, qty
+// e aggiorna SOLO il codF nel database se mancava (mai sovrascrive desc/prezzo)
 var confirmImp = (function(_ci_orig){
   return function(){
     // Formato nuovo con pendingImportDB
     if(typeof pendingImportDB !== 'undefined' && pendingImportDB && pendingImportDB.length){
       var aggiornatiCodF = 0;
-      var prezziAggiornati = 0;
-      var oggi = new Date().toLocaleDateString('it-IT');
+      var prezziGiornalino = 0;
 
       pendingImportDB.forEach(function(r){
         var coloreValido = ['rosso','verde','blu','giallo','viola','arancio','grigio'];
@@ -479,11 +478,12 @@ var confirmImp = (function(_ci_orig){
         var prezzoVecchio = '';
         if(dbRow && dbRow.prezzo && prezzoCartellino && dbRow.prezzo !== prezzoCartellino){
           prezzoVecchio = dbRow.prezzo;
+          prezziGiornalino++;
         }
 
         // Aggiungi al cartellino con il NOME del database
         var newRow = {
-          data: oggi,
+          data: new Date().toLocaleDateString('it-IT'),
           desc: descFinale,
           codF: r.codF || '',
           codM: r.codM || '',
@@ -498,51 +498,23 @@ var confirmImp = (function(_ci_orig){
         };
         ctRows.push(newRow);
 
-        // ── Aggiorna il database ──
+        // Aggiorna il database SOLO: codF se mancava
         if(dbIdx >= 0 && dbRow){
           var changed = false;
-          // CodF: aggiorna se fornito
-          if(r.codF && r.codF !== dbRow.codF){
+          // CodF: salva se il prodotto non ce l'aveva
+          if(r.codF && !dbRow.codF){
             dbRow.codF = r.codF;
             changed = true;
             aggiornatiCodF++;
           }
-          // Prezzo: storico se cambia
-          if(prezzoCartellino && prezzoCartellino !== dbRow.prezzo && dbRow.prezzo){
-            if(!dbRow.priceHistory) dbRow.priceHistory = [];
-            dbRow.prezzoOld = dbRow.prezzo;
-            dbRow.priceHistory.unshift({ prezzo: dbRow.prezzo, data: dbRow.data || '' });
-            if(dbRow.priceHistory.length > 5) dbRow.priceHistory.length = 5;
-            dbRow.prezzo = prezzoCartellino;
-            dbRow.data = oggi;
-            dbRow.size = (typeof autoSize === 'function') ? autoSize(prezzoCartellino) : dbRow.size;
-            changed = true;
-            prezziAggiornati++;
-          } else if(prezzoCartellino && !dbRow.prezzo){
-            dbRow.prezzo = prezzoCartellino;
-            dbRow.data = oggi;
-            changed = true;
-            prezziAggiornati++;
-          }
-          // PrezzoAcquisto e qty
-          var mag = magazzino[dbIdx] || {};
-          if(r.pa && r.pa !== mag.prezzoAcquisto){
-            mag.prezzoAcquisto = r.pa;
-            mag.prezzoAcquistoData = oggi;
-            changed = true;
-          }
-          if(r.qty > 0){
-            mag.qty = r.qty;
-            mag.qtyData = oggi;
-            changed = true;
-          }
-          // Prezzo giornalino come campo separato
+          // Salva il prezzo giornalino come campo separato (non sovrascrive prezzo principale)
           if(prezzoCartellino){
+            var mag = magazzino[dbIdx] || {};
             mag.prezzoGiornalino = prezzoCartellino;
-            mag.prezzoGiornalinoData = oggi;
+            mag.prezzoGiornalinoData = new Date().toLocaleDateString('it-IT');
+            magazzino[dbIdx] = mag;
             changed = true;
           }
-          magazzino[dbIdx] = mag;
           if(changed){
             lsSet(SK, rows);
             lsSet(MAGK, magazzino);
@@ -553,8 +525,8 @@ var confirmImp = (function(_ci_orig){
 
       CT.save(); CT.render();
       var msg = '✅ ' + pendingImportDB.length + ' cartellini importati';
-      if(aggiornatiCodF > 0) msg += ' | ' + aggiornatiCodF + ' cod.forn.';
-      if(prezziAggiornati > 0) msg += ' | ' + prezziAggiornati + ' prezzi aggiornati';
+      if(aggiornatiCodF > 0) msg += ' | ' + aggiornatiCodF + ' cod.forn. aggiunti';
+      if(prezziGiornalino > 0) msg += ' | ' + prezziGiornalino + ' con prezzo diverso';
       showToastGen('green', msg);
       cancelImp();
       return;

@@ -430,6 +430,7 @@ body.light-mode #confirm-overlay > div { background:#fff; }
   <div id="ct-footer" style="display:none;position:fixed;bottom:56px;left:0;right:0;z-index:90;background:#111;border-top:1px solid #1e1e1e;padding:8px 12px;display:none;">
     <div style="display:flex;gap:8px;">
       <input type="text" id="fn" value="Fattura" placeholder="Nome fattura" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid #2a2a2a;background:#1a1a1a;color:var(--text);font-size:14px;min-height:44px;">
+      <button onclick="ct_syncDB()" style="min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--accent)44;background:transparent;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;white-space:nowrap;">🔄 Sync DB</button>
       <button onclick="ct_svuota()" style="min-height:44px;padding:0 16px;border-radius:10px;border:1px solid #e53e3e44;background:transparent;color:#e53e3e;font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation;white-space:nowrap;">🗑️ Svuota</button>
     </div>
   </div>
@@ -481,10 +482,12 @@ body.light-mode #confirm-overlay > div { background:#fff; }
     </div>
     <div id="imp-prev" style="display:none;margin-top:12px;">
       <div id="imp-wrap" style="overflow-x:auto;max-height:260px;border:1px solid var(--border);border-radius:8px;padding:4px;"></div>
-      <div style="margin-top:8px;display:flex;gap:6px;">
-        <button class="btn btn-green" onclick="confirmImp()">✅ Importa</button>
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-green" onclick="confirmImp()">✅ Importa cartellini</button>
+        <button class="btn" style="background:#3182ce;color:#fff;" onclick="syncCsvAlDatabase()">🔄 Sincronizza Database</button>
         <button class="btn btn-gray" onclick="cancelImp()">✕ Annulla</button>
       </div>
+      <div style="font-size:10px;color:#555;margin-top:6px;">💡 <b>Importa</b> = aggiunge ai cartellini · <b>Sincronizza</b> = aggiorna prezzi, codF, qty, acquisto nel database</div>
     </div>
   </div>
 
