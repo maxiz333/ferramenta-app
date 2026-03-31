@@ -309,30 +309,6 @@ function ordBozzaSetPrezzo(bozzaId, ii, el){
       cartCollegato.items[ii].prezzoUnit = it.prezzoUnit;
       saveCarrelli();
     }
-    // ── Aggiorna prezzo nel database articoli ──
-    if(v && v !== oldVal){
-      var dbIdx = -1;
-      if(it.rowIdx !== undefined && it.rowIdx !== null && rows[it.rowIdx]) dbIdx = it.rowIdx;
-      else if(it.codM){
-        for(var ri = 0; ri < rows.length; ri++){
-          if(rows[ri] && rows[ri].codM === it.codM){ dbIdx = ri; break; }
-        }
-      }
-      if(dbIdx >= 0 && rows[dbIdx]){
-        var r = rows[dbIdx];
-        if(r.prezzo && r.prezzo !== v){
-          r.prezzoOld = r.prezzo;
-          if(!r.priceHistory) r.priceHistory = [];
-          r.priceHistory.unshift({ prezzo: r.prezzo, data: r.data || '' });
-          if(r.priceHistory.length > 3) r.priceHistory.length = 3;
-        }
-        r.prezzo = v;
-        r.data = new Date().toLocaleDateString('it-IT');
-        r.size = (typeof autoSize === 'function') ? autoSize(v) : r.size;
-        lsSet(SK, rows);
-        if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(dbIdx);
-      }
-    }
     renderOrdini();
   }
   inp.addEventListener('blur', save);
@@ -390,12 +366,64 @@ function setStatoOrdine(gi,stato){
   if(stato==='completato'){
     console.log('[LOCK] setStatoOrdine — completato, rilascio lock');
     ordUnlock(o.id);
+    // ── Aggiorna prezzi nel database articoli ──────────────────
+    _syncPrezziOrdineAlDB(o);
   }
   o.stato=stato;
   if(!o.statiLog)o.statiLog={};
   o.statiLog[stato]={ora:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),data:new Date().toLocaleDateString('it-IT')};
   if(stato==='completato') o.completatoAtISO=new Date().toISOString();
   saveOrdini();renderOrdini();
+}
+
+// ── Sync prezzi ordine completato → database articoli ────────────────────────
+// Per ogni articolo dell'ordine, se ha un prezzo, aggiorna rows[].prezzo
+// Il prezzo vecchio va in prezzoOld e priceHistory (max 3)
+function _syncPrezziOrdineAlDB(ord){
+  if(!ord || !ord.items || !ord.items.length) return;
+  var aggiornati = 0;
+  ord.items.forEach(function(it){
+    var prezzoOrd = it.prezzoUnit;
+    if(!prezzoOrd || prezzoOrd === '0' || prezzoOrd === '') return;
+    // Trova articolo nel database
+    var dbIdx = -1;
+    if(it.rowIdx !== undefined && it.rowIdx !== null && rows[it.rowIdx]) dbIdx = it.rowIdx;
+    else if(it.codM){
+      for(var ri = 0; ri < rows.length; ri++){
+        if(rows[ri] && rows[ri].codM === it.codM){ dbIdx = ri; break; }
+      }
+    }
+    if(dbIdx < 0 || !rows[dbIdx]) return;
+    var r = rows[dbIdx];
+    // Se il prezzo è uguale, non fare nulla
+    if(r.prezzo === prezzoOrd) return;
+    // Archivia prezzo corrente → prezzoOld + priceHistory
+    if(r.prezzo){
+      if(!r.priceHistory) r.priceHistory = [];
+      // Salva anche il prezzoOld attuale nello storico (se diverso)
+      if(r.prezzoOld && r.prezzoOld !== r.prezzo){
+        // prezzoOld va in coda allo storico se non c'è già
+        var giaNello = r.priceHistory.some(function(p){ return p.prezzo === r.prezzoOld; });
+        if(!giaNello) r.priceHistory.push({ prezzo: r.prezzoOld, data: '' });
+      }
+      r.prezzoOld = r.prezzo;
+      // Aggiungi il prezzo corrente in cima allo storico
+      r.priceHistory.unshift({ prezzo: r.prezzo, data: r.data || '' });
+      // Max 3 nello storico
+      if(r.priceHistory.length > 3) r.priceHistory.length = 3;
+    }
+    // Scrivi nuovo prezzo
+    r.prezzo = prezzoOrd;
+    r.data = new Date().toLocaleDateString('it-IT');
+    r.size = (typeof autoSize === 'function') ? autoSize(prezzoOrd) : r.size;
+    // Salva su Firebase
+    if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(dbIdx);
+    aggiornati++;
+  });
+  if(aggiornati){
+    lsSet(SK, rows);
+    showToastGen('green', '💰 ' + aggiornati + ' prezz' + (aggiornati === 1 ? 'o aggiornato' : 'i aggiornati') + ' nel database');
+  }
 }
 var ORDK_CESTINO = 'cp4_ordini_cestino';
 var ordiniCestino = lsGet(ORDK_CESTINO) || [];
@@ -2358,6 +2386,14 @@ function openEditProdotto(i, isNew){
   sf('ep-codm',   r.codM || '');
   sf('ep-prezzo', r.prezzo || '');
   sf('ep-prezzoold', r.prezzoOld || '');
+  // Popola tendina storico prezzi
+  var ph = r.priceHistory || [];
+  var ph2El = document.getElementById('ep-ph-2');
+  var ph3El = document.getElementById('ep-ph-3');
+  var phWrap = document.getElementById('ep-price-history');
+  if(ph2El) ph2El.textContent = ph[0] ? ('€ ' + ph[0].prezzo + (ph[0].data ? ' — ' + ph[0].data : '')) : '—';
+  if(ph3El) ph3El.textContent = ph[1] ? ('€ ' + ph[1].prezzo + (ph[1].data ? ' — ' + ph[1].data : '')) : '—';
+  if(phWrap) phWrap.style.display = 'none'; // chiusa di default
   sf('ep-acq',    m.prezzoAcquisto || '');
   sf('ep-specs',  m.specs || '');
   sf('ep-marca',  m.marca || '');
@@ -2383,6 +2419,13 @@ function openEditProdotto(i, isNew){
 
   document.getElementById('ep').classList.add('open');
   setTimeout(function(){ document.getElementById('ep-desc').focus(); renderCorrelati(_epIdx); renderScaglioni(_epIdx); }, 100);
+}
+
+// Tendina storico prezzi nella scheda prodotto
+function togglePriceHistory(){
+  var el = document.getElementById('ep-price-history');
+  if(!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 function epFillSubcat(selectedSub){

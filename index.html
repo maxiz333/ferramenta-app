@@ -1247,7 +1247,11 @@ body.light-mode #confirm-overlay > div { background:#fff; }
       </div>
       <div style="flex:1;">
         <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">↩️ Prezzo vecchio</div>
-        <input type="text" id="ep-prezzoold" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:#111;color:var(--muted);font-size:13px;">
+        <input type="text" id="ep-prezzoold" readonly style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px 8px 0 0;background:#111;color:var(--muted);font-size:13px;cursor:pointer;" onclick="togglePriceHistory()">
+        <div id="ep-price-history" style="display:none;background:#0d0d0d;border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;padding:4px 8px;">
+          <div id="ep-ph-2" style="font-size:11px;color:#666;padding:3px 0;border-bottom:1px solid #1a1a1a;">—</div>
+          <div id="ep-ph-3" style="font-size:11px;color:#555;padding:3px 0;">—</div>
+        </div>
       </div>
       <div style="width:90px;">
         <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">🔒 Acq.</div>
