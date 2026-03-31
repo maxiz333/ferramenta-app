@@ -182,6 +182,6 @@ startAutoRefresh();
 updateOrdCounter();
 // Chiedi permesso notifiche su tutti i dispositivi (non solo PC)
 setTimeout(richediNotifPermesso, 1500);
-loadEditorSettings();
-applyEditorCSS();
+try{ loadEditorSettings(); }catch(e){ console.warn('loadEditorSettings rinviato:', e.message); }
+try{ applyEditorCSS(); }catch(e){}
 
