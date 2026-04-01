@@ -1346,21 +1346,53 @@ function _finalizzaImportPipe(){
 }
 
 function _finalizzaImportNuovo(){
-  if(!pendingImportDB.length){showToastGen('red','- Nessun dato valido');return;}
+  if(!pendingImportDB.length){showToastGen('red','⚠ Nessun dato valido');return;}
   pendingImportCartellini.forEach(function(r){if(!r.size)r.size=autoSize(r.prezzo);});
-  var h='<div style="margin-bottom:8px;font-size:12px;color:var(--accent);font-weight:700;">- '+pendingImportDB.length+' prodotti nel database &nbsp;|&nbsp; -- '+pendingImportCartellini.length+' nei cartellini</div>';
-  h+='<table style="width:100%;border-collapse:collapse;font-size:10px;"><tr style="background:#1e3a5f;color:#fff;"><th style="padding:4px;text-align:left;">Nome</th><th>Cod.F</th><th>Cod.M</th><th>U.M.</th><th>Qty</th><th>€ Acq.</th><th>€ Vend.</th><th>🏷️</th></tr>';
-  pendingImportDB.slice(0,200).forEach(function(r){
+  var tot = pendingImportDB.length;
+  var h='<div style="margin-bottom:8px;font-size:12px;color:var(--accent);font-weight:700;">📋 '+tot+' prodotti &nbsp;|&nbsp; 🏷️ '+pendingImportCartellini.length+' cartellini &nbsp; <span style="font-size:10px;color:#555;font-weight:400;">— clicca una cella per modificare</span></div>';
+  var inpStyle = 'background:transparent;border:none;color:inherit;font-size:10px;width:100%;padding:2px 0;font-family:inherit;';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:10px;"><tr style="background:#1e3a5f;color:#fff;"><th style="padding:4px;text-align:left;">Nome</th><th>Cod.F</th><th>Cod.M</th><th>U.M.</th><th>Qty</th><th>€ Acq.</th><th>€ Vend.</th><th>🏷️</th><th></th></tr>';
+  var max = Math.min(tot, 200);
+  for(var ri = 0; ri < max; ri++){
+    var r = pendingImportDB[ri];
     var gColor = r.giornalino || '';
-    var gLabel = gColor ? ('<span style="color:#38a169;font-weight:800;">'+esc(gColor)+'</span>') : '-';
-    h+='<tr style="border-bottom:1px solid #333;background:'+(gColor?'#1a2a00':'transparent')+';"><td style="padding:3px;color:var(--text);">'+esc(r.desc)+'</td><td style="color:#fc8181;">'+esc(r.codF)+'</td><td style="color:var(--accent);">'+esc(r.codM)+'</td><td style="color:#63b3ed;">'+esc(r.unit||'pz')+'</td><td>'+r.qty+'</td><td>'+esc(r.pa)+'</td><td style="font-weight:700;">'+esc(r.pv)+'</td><td>'+gLabel+'</td></tr>';
-  });
-  if(pendingImportDB.length>200) h+='<tr><td colspan="8" style="padding:6px;color:#888;text-align:center;">…e altri '+(pendingImportDB.length-200)+' prodotti</td></tr>';
+    var bg = gColor ? '#1a2a00' : 'transparent';
+    h+='<tr id="csv-row-'+ri+'" style="border-bottom:1px solid #333;background:'+bg+';">';
+    h+='<td style="padding:3px;"><input style="'+inpStyle+'color:var(--text);" value="'+esc(r.desc)+'" onchange="pendingImportDB['+ri+'].desc=this.value"></td>';
+    h+='<td><input style="'+inpStyle+'color:#fc8181;" value="'+esc(r.codF)+'" onchange="pendingImportDB['+ri+'].codF=this.value"></td>';
+    h+='<td><input style="'+inpStyle+'color:var(--accent);" value="'+esc(r.codM)+'" onchange="pendingImportDB['+ri+'].codM=this.value"></td>';
+    h+='<td><input style="'+inpStyle+'color:#63b3ed;width:30px;" value="'+esc(r.unit||'pz')+'" onchange="pendingImportDB['+ri+'].unit=this.value"></td>';
+    h+='<td><input type="number" style="'+inpStyle+'color:var(--text);width:40px;" value="'+r.qty+'" onchange="pendingImportDB['+ri+'].qty=parseFloat(this.value)||0"></td>';
+    h+='<td><input style="'+inpStyle+'color:var(--text);width:45px;" value="'+esc(r.pa)+'" onchange="pendingImportDB['+ri+'].pa=this.value"></td>';
+    h+='<td><input style="'+inpStyle+'color:var(--text);font-weight:700;width:45px;" value="'+esc(r.pv)+'" onchange="pendingImportDB['+ri+'].pv=this.value"></td>';
+    h+='<td><input style="'+inpStyle+'color:#38a169;width:40px;" value="'+esc(gColor)+'" onchange="pendingImportDB['+ri+'].giornalino=this.value"></td>';
+    h+='<td><button onclick="_csvRemoveRow('+ri+')" style="background:transparent;border:none;color:#e53e3e;font-size:14px;cursor:pointer;padding:0 4px;" title="Rimuovi riga">✕</button></td>';
+    h+='</tr>';
+  }
+  if(tot>200) h+='<tr><td colspan="9" style="padding:6px;color:#888;text-align:center;">…e altri '+(tot-200)+' prodotti (non modificabili)</td></tr>';
   h+='</table>';
   document.getElementById('imp-wrap').innerHTML=h;
   document.getElementById('imp-prev').style.display='block';
   pendingImport=null;
-  showToastGen('green','- '+pendingImportDB.length+' righe lette - controlla e conferma');
+  showToastGen('green','📋 '+tot+' righe lette — modifica se necessario, poi conferma');
+}
+
+// Rimuove una riga dalla preview CSV e rigenera la tabella
+function _csvRemoveRow(idx){
+  if(!pendingImportDB || idx < 0 || idx >= pendingImportDB.length) return;
+  pendingImportDB.splice(idx, 1);
+  // Rimuovi anche da pendingImportCartellini se c'era
+  if(pendingImportCartellini && pendingImportCartellini.length){
+    pendingImportCartellini = pendingImportCartellini.filter(function(c){
+      return pendingImportDB.some(function(r){ return r.codM === c.codM; });
+    });
+  }
+  if(!pendingImportDB.length){
+    cancelImp();
+    showToastGen('yellow','Tutte le righe rimosse');
+    return;
+  }
+  _finalizzaImportNuovo();
 }
 var pendingImportDB=null;
 var pendingImportCartellini=null;
