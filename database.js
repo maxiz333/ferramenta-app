@@ -1349,12 +1349,13 @@ function _finalizzaImportNuovo(){
   if(!pendingImportDB.length){showToastGen('red','- Nessun dato valido');return;}
   pendingImportCartellini.forEach(function(r){if(!r.size)r.size=autoSize(r.prezzo);});
   var h='<div style="margin-bottom:8px;font-size:12px;color:var(--accent);font-weight:700;">- '+pendingImportDB.length+' prodotti nel database &nbsp;|&nbsp; -- '+pendingImportCartellini.length+' nei cartellini</div>';
-  h+='<table style="width:100%;border-collapse:collapse;font-size:10px;"><tr style="background:#1e3a5f;color:#fff;"><th style="padding:4px;text-align:left;">Nome</th><th>Cod.F</th><th>Cod.M</th><th>Qty</th><th>- Acq.</th><th>- Vend.</th><th>--</th></tr>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:10px;"><tr style="background:#1e3a5f;color:#fff;"><th style="padding:4px;text-align:left;">Nome</th><th>Cod.F</th><th>Cod.M</th><th>U.M.</th><th>Qty</th><th>€ Acq.</th><th>€ Vend.</th><th>🏷️</th></tr>';
   pendingImportDB.slice(0,200).forEach(function(r){
-    var isSi=r.giornalino==='si'||r.giornalino==='s-';
-    h+='<tr style="border-bottom:1px solid #333;background:'+(isSi?'#1a2a00':'transparent')+';"><td style="padding:3px;color:var(--text);">'+esc(r.desc)+'</td><td style="color:#fc8181;">'+esc(r.codF)+'</td><td style="color:var(--accent);">'+esc(r.codM)+'</td><td>'+r.qty+'</td><td>'+esc(r.pa)+'</td><td style="font-weight:700;">'+esc(r.pv)+'</td><td>'+(isSi?'<span style="color:#38a169;font-weight:800;">SI</span>':'-')+'</td></tr>';
+    var gColor = r.giornalino || '';
+    var gLabel = gColor ? ('<span style="color:#38a169;font-weight:800;">'+esc(gColor)+'</span>') : '-';
+    h+='<tr style="border-bottom:1px solid #333;background:'+(gColor?'#1a2a00':'transparent')+';"><td style="padding:3px;color:var(--text);">'+esc(r.desc)+'</td><td style="color:#fc8181;">'+esc(r.codF)+'</td><td style="color:var(--accent);">'+esc(r.codM)+'</td><td style="color:#63b3ed;">'+esc(r.unit||'pz')+'</td><td>'+r.qty+'</td><td>'+esc(r.pa)+'</td><td style="font-weight:700;">'+esc(r.pv)+'</td><td>'+gLabel+'</td></tr>';
   });
-  if(pendingImportDB.length>200) h+='<tr><td colspan="7" style="padding:6px;color:#888;text-align:center;">-e altri '+(pendingImportDB.length-200)+' prodotti</td></tr>';
+  if(pendingImportDB.length>200) h+='<tr><td colspan="8" style="padding:6px;color:#888;text-align:center;">…e altri '+(pendingImportDB.length-200)+' prodotti</td></tr>';
   h+='</table>';
   document.getElementById('imp-wrap').innerHTML=h;
   document.getElementById('imp-prev').style.display='block';
