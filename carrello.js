@@ -825,6 +825,7 @@ function _doCartSearch(){
   }
   var matches=[];
   var qLow=q.toLowerCase();
+  var qWords=qLow.split(/\s+/).filter(function(w){return w.length>0;});
   rows.forEach(function(r,i){
     if(!r)return;
     if(removed.has(String(i)))return;
@@ -832,9 +833,13 @@ function _doCartSearch(){
     // Protezione: codF e codM possono essere null/undefined/number
     var codF=String(r.codF||'');
     var codM=String(r.codM||'');
-    // Early-exit rapido con indexOf prima del fuzzyScore (più veloce su 19k articoli)
-    var text=[r.desc,codF,codM,m.marca,m.specs].join(' ');
-    if(text.toLowerCase().indexOf(qLow)<0 && !codF.startsWith(q) && !codM.startsWith(q)) return;
+    // Early-exit: ogni parola della query deve essere presente nel testo
+    var text=[r.desc,codF,codM,m.marca,m.specs].join(' ').toLowerCase();
+    var ok=true;
+    for(var w=0;w<qWords.length;w++){
+      if(text.indexOf(qWords[w])<0){ok=false;break;}
+    }
+    if(!ok) return;
     var score=fuzzyScore(q,text);
     if(score>=50)matches.push({r:r,i:i,m:m,score:score});
   });
