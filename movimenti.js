@@ -376,25 +376,27 @@ function closeFatturePopup(){
 // ------------------------------------------------------------------
 function duplicaArticolo(i) {
   if (i === null || !rows[i]) return;
-  var nr = JSON.parse(JSON.stringify(rows[i]));
-  nr.desc = (nr.desc || 'Articolo') + ' (copia)';
-  nr.codM = '';
-  nr.priceHistory = [];
-  rows.push(nr);
-  var ni = rows.length - 1;
-  if (magazzino[i]) {
-    magazzino[ni] = JSON.parse(JSON.stringify(magazzino[i]));
-    magazzino[ni].qty = 0;
-    magazzino[ni].correlati = [];
-  } else {
-    magazzino[ni] = { qty: 0, unit: 'pz' };
-  }
-  lsSet(SK, rows);
-  lsSet(MAGK, magazzino);
-  renderInventario();
-  cancelEditProdotto();
-  setTimeout(function () { openEditProdotto(ni); }, 80);
-  showToastGen('green', '\u2705 Articolo duplicato \u2014 modifica la copia');
+  showConfirm('⚠️ Duplicare "' + (rows[i].desc||'Articolo') + '" come NUOVO articolo nel database?', function(){
+    var nr = JSON.parse(JSON.stringify(rows[i]));
+    nr.desc = (nr.desc || 'Articolo') + ' (copia)';
+    nr.codM = '';
+    nr.priceHistory = [];
+    rows.push(nr);
+    var ni = rows.length - 1;
+    if (magazzino[i]) {
+      magazzino[ni] = JSON.parse(JSON.stringify(magazzino[i]));
+      magazzino[ni].qty = 0;
+      magazzino[ni].correlati = [];
+    } else {
+      magazzino[ni] = { qty: 0, unit: 'pz' };
+    }
+    lsSet(SK, rows);
+    lsSet(MAGK, magazzino);
+    renderInventario();
+    cancelEditProdotto();
+    setTimeout(function () { openEditProdotto(ni); }, 80);
+    showToastGen('green', '\u2705 Articolo duplicato — modifica la copia');
+  });
 }
 
 // ------------------------------------------------------------------
@@ -864,25 +866,28 @@ function analisiFotoAI() {
 
 function creaArticoloDaFoto() {
   function gfi(k) { var el = document.getElementById('fi-f-' + k); return el ? el.value.trim() : ''; }
-  var nr = {
-    desc: gfi('desc') || 'Nuovo articolo',
-    codF: gfi('codF'), codM: gfi('codM'),
-    prezzo: gfi('prezzo'), prezzoOld: '', note: '',
-    giornalino: '', priceHistory: [],
-    data: new Date().toLocaleDateString('it-IT'),
-    size: autoSize(gfi('prezzo'))
-  };
-  rows.push(nr);
-  var ni = rows.length - 1;
-  magazzino[ni] = {
-    specs: gfi('specs'), marca: gfi('marca'), nomeFornitore: gfi('nomeFornitore'),
-    qty: 0, unit: 'pz', posizione: '', soglia: '', prezzoAcquisto: ''
-  };
-  lsSet(SK, rows); lsSet(MAGK, magazzino);
-  chiudiFotoImport();
-  renderInventario();
-  setTimeout(function () { openEditProdotto(ni); }, 80);
-  showToastGen('green', '\u2705 Articolo creato da foto!');
+  var descNew = gfi('desc') || 'Nuovo articolo';
+  showConfirm('⚠️ Aggiungere "' + descNew + '" come NUOVO articolo al database?', function(){
+    var nr = {
+      desc: descNew,
+      codF: gfi('codF'), codM: gfi('codM'),
+      prezzo: gfi('prezzo'), prezzoOld: '', note: '',
+      giornalino: '', priceHistory: [],
+      data: new Date().toLocaleDateString('it-IT'),
+      size: autoSize(gfi('prezzo'))
+    };
+    rows.push(nr);
+    var ni = rows.length - 1;
+    magazzino[ni] = {
+      specs: gfi('specs'), marca: gfi('marca'), nomeFornitore: gfi('nomeFornitore'),
+      qty: 0, unit: 'pz', posizione: '', soglia: '', prezzoAcquisto: ''
+    };
+    lsSet(SK, rows); lsSet(MAGK, magazzino);
+    chiudiFotoImport();
+    renderInventario();
+    setTimeout(function () { openEditProdotto(ni); }, 80);
+    showToastGen('green', '\u2705 Articolo creato da foto!');
+  });
 }
 
 document.addEventListener('keydown', function(e){

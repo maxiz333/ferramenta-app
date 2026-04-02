@@ -559,9 +559,11 @@ function clearAll(){
 }
 
 function addRow(){
-  var firstDate=rows.length>0?rows[0].data:'04-03-2026';
-  rows.push({data:firstDate,desc:'',codF:'',codM:'',prezzoOld:'',prezzo:'',size:'small',note:'',giornalino:''});
-  renderTable();save();
+  showConfirm('⚠️ Stai aggiungendo un NUOVO articolo al database. Continuare?', function(){
+    var firstDate=rows.length>0?rows[0].data:'04-03-2026';
+    rows.push({data:firstDate,desc:'',codF:'',codM:'',prezzoOld:'',prezzo:'',size:'small',note:'',giornalino:''});
+    renderTable();save();
+  });
 }
 
 function delRow(i){
@@ -1492,9 +1494,8 @@ function confirmImp(){
         if(r.pa)m.prezzoAcquisto=r.pa;
         magazzino[existIdx]=m;
       } else {
-        var newIdx=rows.length;
-        rows.push({desc:r.desc,codF:r.codF||'',codM:r.codM,prezzo:r.pv||'',prezzoOld:'',barrato:'no',promo:'no',size:autoSize(r.pv||'0'),data:new Date().toLocaleDateString('it-IT'),note:'',giornalino:''});
-        magazzino[newIdx]={qty:r.qty,prezzoAcquisto:r.pa||'',unit:r.unit||'pz'};
+        // Articolo NON trovato nel database — NON aggiungere (database protetto)
+        console.warn('[IMPORT] Articolo non trovato, saltato:', r.codM, r.desc);
       }
     });
     lsSet(SK,rows);lsSet(MAGK,magazzino);
@@ -1545,7 +1546,7 @@ function syncCsvAlDatabase(){
     return;
   }
   var oggi = new Date().toLocaleDateString('it-IT');
-  var stats = { prezzi:0, codF:0, qty:0, acq:0, nuovi:0, unit:0 };
+  var stats = { prezzi:0, codF:0, qty:0, acq:0, nuovi:0, unit:0, nonTrovati:0 };
 
   pendingImportDB.forEach(function(r){
     if(!r.codM && !r.codF) return;
@@ -1610,22 +1611,21 @@ function syncCsvAlDatabase(){
         stats.unit++;
       }
 
+      // 6. Giornalino
+      if(r.giornalino && r.giornalino !== row.giornalino){
+        row.giornalino = r.giornalino;
+        changed = true;
+        if(!stats.giorn) stats.giorn = 0;
+        stats.giorn++;
+      }
+
       if(changed){
         magazzino[dbIdx] = m;
         if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(dbIdx);
       }
     } else {
-      // Articolo nuovo — aggiungilo al database
-      var newIdx = rows.length;
-      rows.push({
-        desc: r.desc || '', codF: r.codF || '', codM: r.codM || '',
-        prezzo: r.pv || '', prezzoOld: '', barrato:'no', promo:'no',
-        size: (typeof autoSize === 'function') ? autoSize(r.pv||'0') : 'small',
-        data: oggi, note:'', giornalino:'', priceHistory:[]
-      });
-      magazzino[newIdx] = { qty: r.qty||0, prezzoAcquisto: r.pa||'', unit: r.unit||'pz' };
-      if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(newIdx);
-      stats.nuovi++;
+      // Articolo NON trovato — NON aggiungere (database protetto)
+      stats.nonTrovati++;
     }
   });
 
@@ -1641,6 +1641,8 @@ function syncCsvAlDatabase(){
   if(stats.acq) parts.push(stats.acq + ' pr.acquisto');
   if(stats.nuovi) parts.push(stats.nuovi + ' nuovi articoli');
   if(stats.unit) parts.push(stats.unit + ' unità misura');
+  if(stats.nonTrovati) parts.push('⚠️ ' + stats.nonTrovati + ' non trovati (saltati)');
+  if(stats.giorn) parts.push(stats.giorn + ' giornalino');
   if(parts.length){
     showToastGen('green', '✅ Database aggiornato: ' + parts.join(' · '));
   } else {
@@ -2156,6 +2158,7 @@ function closePos(){
 // [SECTION: MAGAZZINO] -----------------------------------------------------
 //  Inventario, scorte, soglie, movimenti qty, categorie, magazzino
 var invSottoScorta=false;
+var invGiornalino=false;
 
 function filterSottoScorta(){
   invSottoScorta=!invSottoScorta;
@@ -2164,6 +2167,17 @@ function filterSottoScorta(){
     btn.style.background=invSottoScorta?'#e53e3e':'#1e1e1e';
     btn.style.color=invSottoScorta?'#fff':'var(--muted)';
     btn.style.borderColor=invSottoScorta?'#e53e3e':'var(--border)';
+  }
+  renderInventario();
+}
+
+function filterGiornalino(){
+  invGiornalino=!invGiornalino;
+  var btn=document.getElementById('inv-giorn-btn');
+  if(btn){
+    btn.style.background=invGiornalino?'#805ad5':'#1e1e1e';
+    btn.style.color=invGiornalino?'#fff':'var(--muted)';
+    btn.style.borderColor=invGiornalino?'#805ad5':'var(--border)';
   }
   renderInventario();
 }

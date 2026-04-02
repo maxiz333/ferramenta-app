@@ -69,7 +69,7 @@ function _doInvSearch(){
 
   // Database non ancora pronto
   if(!rows || !rows.length){
-    body.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--accent);font-size:14px;">⏳ Database in caricamento...</td></tr>';
+    body.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--accent);font-size:14px;">⏳ Database in caricamento...</td></tr>';
     if(statsEl) statsEl.innerHTML = '';
     return;
   }
@@ -82,11 +82,12 @@ function _doInvSearch(){
   var hasSearch = rawSearch.trim().length >= 3;
   var hasFilter = !!catFilter;
   var hasSottoScorta = (typeof invSottoScorta !== 'undefined') && invSottoScorta;
+  var hasGiornalino = (typeof invGiornalino !== 'undefined') && invGiornalino;
 
   // Nessun criterio → mostra placeholder
-  if(!hasSearch && !hasFilter && !hasSottoScorta){
+  if(!hasSearch && !hasFilter && !hasSottoScorta && !hasGiornalino){
     body.innerHTML =
-      '<tr><td colspan="9" style="text-align:center;padding:50px 20px;color:var(--muted);font-size:13px;">' +
+      '<tr><td colspan="10" style="text-align:center;padding:50px 20px;color:var(--muted);font-size:13px;">' +
       '🔍 Digita almeno <b style="color:var(--accent)">3 caratteri</b> per cercare tra ' +
       '<b style="color:var(--accent)">' + rows.length.toLocaleString('it-IT') + '</b> articoli' +
       '</td></tr>';
@@ -131,6 +132,9 @@ function _doInvSearch(){
     var isLow = qty !== null && qty <= soglia;
     if(hasSottoScorta && !isLow) continue;
 
+    // Filtro giornalino
+    if(hasGiornalino && !(r.giornalino)) continue;
+
     // Statistiche su tutti i match (non solo i primi 50)
     tot++;
     if(qty !== null) totVal += (parseFloat(r.prezzo) || 0) * qty;
@@ -145,7 +149,7 @@ function _doInvSearch(){
   var html = '';
 
   if(!results.length){
-    html = '<tr><td colspan="9" style="padding:40px;text-align:center;color:var(--muted);">' +
+    html = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);">' +
       'Nessun risultato per <b style="color:var(--accent)">"' + esc(rawSearch) + '"</b>' +
       '</td></tr>';
   } else {
@@ -210,12 +214,21 @@ function _doInvSearch(){
       html += '<td style="padding:8px 6px;">';
       if(catLabel) html += '<div style="font-size:10px;color:var(--accent);">' + esc(catLabel) + '</div>';
       if(sub)      html += '<div style="font-size:10px;color:#555;">' + esc(sub) + '</div>';
+      html += '</td>';
+      // 10. Giornalino
+      var giorn = r.giornalino || '';
+      html += '<td style="padding:8px 6px;text-align:center;">';
+      if(giorn){
+        var gCol = {rosso:'#e53e3e',verde:'#38a169',blu:'#3182ce',giallo:'#d69e2e',viola:'#805ad5',arancio:'#dd6b20',grigio:'#718096'};
+        var dotColor = gCol[giorn] || '#888';
+        html += '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + dotColor + ';" title="' + esc(giorn) + '"></span>';
+      }
       html += '</td></tr>';
     }
 
     // Banner se ci sono più di MAX risultati
     if(tot > MAX){
-      html += '<tr><td colspan="9" style="text-align:center;padding:12px;font-size:12px;color:var(--muted);background:rgba(245,196,0,.04);border-top:1px solid var(--border);">' +
+      html += '<tr><td colspan="10" style="text-align:center;padding:12px;font-size:12px;color:var(--muted);background:rgba(245,196,0,.04);border-top:1px solid var(--border);">' +
               '📌 Mostrati <b style="color:var(--accent)">' + MAX + '</b> su <b>' + tot + '</b> risultati — aggiungi parole per restringere la ricerca.' +
               '</td></tr>';
     }

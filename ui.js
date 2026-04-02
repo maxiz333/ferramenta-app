@@ -103,35 +103,36 @@ async function elaboraFotoAI(base64, mediaType){
 function confermaDaFoto(){
     var desc = gf('foto-desc');
   if(!desc){ showToastOk('-- Inserisci almeno una descrizione'); return; }
-  var newRow = {
-    desc: desc,
-    codF: gf('foto-codf'),
-    codM: gf('foto-codm'),
-    prezzo: gf('foto-prezzo'),
-    prezzoOld: '',
-    note: gf('foto-note'),
-    giornalino: '',
-    priceHistory: [],
-    data: new Date().toLocaleDateString('it-IT'),
-    size: autoSize(gf('foto-prezzo'))
-  };
-  var ni = rows.length;
-  rows.push(newRow);
-  magazzino[ni] = {
-    marca: gf('foto-marca'),
-    specs: gf('foto-specs'),
-    qty: 0,
-    unit: 'pz',
-    soglia: ''
-  };
-  lsSet(SK, rows);
-  lsSet(MAGK, magazzino);
-  closeFotoOverlay();
-  renderInventario();
-  updateStockBadge();
-  showToastOk('- Articolo creato da foto!');
-  // Apri subito la scheda per completarlo
-  setTimeout(function(){ openEditProdotto(ni); }, 200);
+  showConfirm('⚠️ Aggiungere "'+desc+'" come NUOVO articolo al database?', function(){
+    var newRow = {
+      desc: desc,
+      codF: gf('foto-codf'),
+      codM: gf('foto-codm'),
+      prezzo: gf('foto-prezzo'),
+      prezzoOld: '',
+      note: gf('foto-note'),
+      giornalino: '',
+      priceHistory: [],
+      data: new Date().toLocaleDateString('it-IT'),
+      size: autoSize(gf('foto-prezzo'))
+    };
+    var ni = rows.length;
+    rows.push(newRow);
+    magazzino[ni] = {
+      marca: gf('foto-marca'),
+      specs: gf('foto-specs'),
+      qty: 0,
+      unit: 'pz',
+      soglia: ''
+    };
+    lsSet(SK, rows);
+    lsSet(MAGK, magazzino);
+    closeFotoOverlay();
+    renderInventario();
+    updateStockBadge();
+    showToastOk('✅ Articolo creato da foto!');
+    setTimeout(function(){ openEditProdotto(ni); }, 200);
+  });
 }
 
 

@@ -331,6 +331,7 @@ body.light-mode #confirm-overlay > div { background:#fff; }
       <option value="">Tutte le categorie</option>
     </select>
     <button onclick="filterSottoScorta()" id="inv-scorta-btn" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:#1e1e1e;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;">🔴 Sotto scorta</button>
+    <button onclick="filterGiornalino()" id="inv-giorn-btn" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:#1e1e1e;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;">🏷️ Giornalino</button>
     <button onclick="stampaListaRiordino()" style="padding:8px 12px;border-radius:8px;border:1px solid #e53e3e;background:transparent;color:#e53e3e;font-size:12px;font-weight:700;cursor:pointer;" title="Genera foglio stampabile prodotti da riordinare">🖨️ Lista riordino</button>
     
   </div>
@@ -346,6 +347,7 @@ body.light-mode #confirm-overlay > div { background:#fff; }
         <th style="padding:8px 6px;text-align:right;color:var(--accent);font-size:11px;width:58px;opacity:.6;" title="Prezzo di acquisto — riservato">🔒 Acquisto</th>
         <th style="padding:8px 6px;text-align:left;color:var(--accent);font-size:11px;width:100px;">📍 Posizione</th>
         <th style="padding:8px 6px;text-align:left;color:var(--accent);font-size:11px;width:90px;">Categoria</th>
+        <th style="padding:8px 6px;text-align:center;color:var(--accent);font-size:11px;width:30px;">🏷️</th>
       </tr></thead>
       <tbody id="inv-body"></tbody>
     </table>
