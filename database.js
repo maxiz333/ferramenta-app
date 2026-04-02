@@ -1895,28 +1895,82 @@ function searchHistory(){
 }
 
 // -- EDITOR CARTELLINI -------------------
-var editorSettings={priceColor:'#000000',borderColor:'#aaaaaa',smW:67,smH:38,lgW:94,lgH:39,barrato:false};
+var editorSettings={
+  priceColor:'#000000',borderColor:'#aaaaaa',frameColor:'#aaaaaa',
+  smW:67,smH:38,lgW:94,lgH:39,barrato:false,
+  priceFontSm:26,priceFontLg:32,promoFont:6,oldPriceFont:10,borderWidth:0.5,
+  shape:'',frame:'',bg:'#ffffff',promoText:'PROMO'
+};
 
 function loadEditorSettings(){
   var s=lsGet('cp4_editor',null);
   if(s) editorSettings=Object.assign(editorSettings,s);
-  document.getElementById('ec-price-color').value=editorSettings.priceColor;
-  document.getElementById('ec-border-color').value=editorSettings.borderColor;
-  document.getElementById('ec-sm-w').value=editorSettings.smW;
-  document.getElementById('ec-sm-h').value=editorSettings.smH;
-  document.getElementById('ec-lg-w').value=editorSettings.lgW;
-  document.getElementById('ec-lg-h').value=editorSettings.lgH;
-  document.getElementById('ec-barrato').checked=editorSettings.barrato;
+
+  // Campi base
+  var el;
+  if((el=document.getElementById('ec-price-color')))  el.value=editorSettings.priceColor||'#000000';
+  if((el=document.getElementById('ec-border-color'))) el.value=editorSettings.borderColor||'#aaaaaa';
+  if((el=document.getElementById('ec-frame-color')))  el.value=editorSettings.frameColor||'#aaaaaa';
+  if((el=document.getElementById('ec-sm-w')))  el.value=editorSettings.smW||67;
+  if((el=document.getElementById('ec-sm-h')))  el.value=editorSettings.smH||38;
+  if((el=document.getElementById('ec-lg-w')))  el.value=editorSettings.lgW||94;
+  if((el=document.getElementById('ec-lg-h')))  el.value=editorSettings.lgH||39;
+  if((el=document.getElementById('ec-barrato'))) el.checked=!!editorSettings.barrato;
+
+  // Slider dimensioni testo
+  ec_setSlider('ec-price-font-sm',  'ec-price-font-sm-val',  editorSettings.priceFontSm||26,  'pt');
+  ec_setSlider('ec-price-font-lg',  'ec-price-font-lg-val',  editorSettings.priceFontLg||32,  'pt');
+  ec_setSlider('ec-promo-font',     'ec-promo-font-val',     editorSettings.promoFont||6,     'pt');
+  ec_setSlider('ec-oldprice-font',  'ec-oldprice-font-val',  editorSettings.oldPriceFont||10, 'pt');
+  ec_setSlider('ec-border-width',   'ec-border-width-val',   editorSettings.borderWidth||0.5, 'px');
+
+  // Forma attiva
+  ec_highlightShape(editorSettings.shape||'');
+  // Cornice attiva
+  ec_highlightFrame(editorSettings.frame||'');
+  // Sfondo attivo
+  ec_highlightBg(editorSettings.bg||'#ffffff');
+  // Testo promo
+  if((el=document.getElementById('ec-promo-text'))) el.value=editorSettings.promoText||'PROMO';
+  ec_highlightPromoBtn(editorSettings.promoText||'PROMO');
+}
+
+function ec_setSlider(sliderId, valId, value, unit){
+  var sl=document.getElementById(sliderId);
+  var vl=document.getElementById(valId);
+  if(sl) sl.value=value;
+  if(vl) vl.textContent=value+unit;
+}
+
+function ec_updateSliderVal(sliderId, valId, unit){
+  var sl=document.getElementById(sliderId);
+  var vl=document.getElementById(valId);
+  if(!sl||!vl) return;
+  vl.textContent=sl.value+unit;
+  applyEditor();
 }
 
 function applyEditor(){
-  editorSettings.priceColor=document.getElementById('ec-price-color').value;
-  editorSettings.borderColor=document.getElementById('ec-border-color').value;
-  editorSettings.smW=parseInt(document.getElementById('ec-sm-w').value)||67;
-  editorSettings.smH=parseInt(document.getElementById('ec-sm-h').value)||38;
-  editorSettings.lgW=parseInt(document.getElementById('ec-lg-w').value)||94;
-  editorSettings.lgH=parseInt(document.getElementById('ec-lg-h').value)||39;
-  editorSettings.barrato=document.getElementById('ec-barrato').checked;
+  // Leggi tutti i valori dai controlli
+  function gv(id,fallback){ var el=document.getElementById(id); return el?el.value:fallback; }
+  function gn(id,fallback){ var el=document.getElementById(id); return el?parseFloat(el.value)||fallback:fallback; }
+  function gb(id){ var el=document.getElementById(id); return el?el.checked:false; }
+
+  editorSettings.priceColor   = gv('ec-price-color','#000000');
+  editorSettings.borderColor  = gv('ec-border-color','#aaaaaa');
+  editorSettings.frameColor   = gv('ec-frame-color','#aaaaaa');
+  editorSettings.smW          = parseInt(gv('ec-sm-w','67'))||67;
+  editorSettings.smH          = parseInt(gv('ec-sm-h','38'))||38;
+  editorSettings.lgW          = parseInt(gv('ec-lg-w','94'))||94;
+  editorSettings.lgH          = parseInt(gv('ec-lg-h','39'))||39;
+  editorSettings.barrato      = gb('ec-barrato');
+  editorSettings.priceFontSm  = gn('ec-price-font-sm',26);
+  editorSettings.priceFontLg  = gn('ec-price-font-lg',32);
+  editorSettings.promoFont    = gn('ec-promo-font',6);
+  editorSettings.oldPriceFont = gn('ec-oldprice-font',10);
+  editorSettings.borderWidth  = gn('ec-border-width',0.5);
+  // shape, frame, bg, promoText sono settati direttamente dai bottoni
+
   lsSet('cp4_editor',editorSettings);
   applyEditorCSS();
   renderEditorPreview();
@@ -1926,22 +1980,54 @@ function applyEditor(){
 function applyEditorCSS(){
   var s=document.getElementById('editor-style');
   if(!s){s=document.createElement('style');s.id='editor-style';document.head.appendChild(s);}
-  var smW=editorSettings.smW, smH=editorSettings.smH;
-  var lgW=editorSettings.lgW, lgH=editorSettings.lgH;
-  // Rapporto d'aspetto calcolato dai valori reali in mm
+  var smW=editorSettings.smW||67, smH=editorSettings.smH||38;
+  var lgW=editorSettings.lgW||94, lgH=editorSettings.lgH||39;
   var smRatio=(smW/smH).toFixed(4);
   var lgRatio=(lgW/lgH).toFixed(4);
+  var bc=editorSettings.borderColor||'#aaaaaa';
+  var fc=editorSettings.frameColor||bc;
+  var bg=editorSettings.bg||'#ffffff';
+  var bw=(editorSettings.borderWidth||0.5)+'px';
+  var pfsm=(editorSettings.priceFontSm||26)+'pt';
+  var pflg=(editorSettings.priceFontLg||32)+'pt';
+  var pf=(editorSettings.promoFont||6)+'pt';
+  var opf=(editorSettings.oldPriceFont||10)+'pt';
+  var shape=editorSettings.shape||'';
+  var frame=editorSettings.frame||'';
+  var promoTxt=editorSettings.promoText||'PROMO';
+
+  // Forma: border-radius
+  var shapeCSS='';
+  if(shape==='rounded') shapeCSS='border-radius:4mm!important;';
+  else if(shape==='pill') shapeCSS='border-radius:12mm!important;';
+  else if(shape==='ticket') shapeCSS='border-radius:2mm!important;clip-path:polygon(0 0,100% 0,100% 100%,0 100%,3mm 50%)!important;';
+
+  // Cornice
+  var frameCSS='';
+  if(frame==='double') frameCSS='outline:1px solid '+fc+'!important;outline-offset:-2.5mm!important;';
+  else if(frame==='dotted') frameCSS='outline:1.5px dotted '+fc+'!important;outline-offset:-2mm!important;';
+  else if(frame==='elegant') frameCSS='outline:0.8px solid '+fc+'!important;outline-offset:-2mm!important;box-shadow:inset 0 0 0 1mm #fff,inset 0 0 0 1.4mm '+fc+'!important;';
+  else if(frame==='deco') frameCSS='outline:1.2px solid '+fc+'!important;outline-offset:-1.8mm!important;';
+
+  // Nastro promo: aggiorna testo via CSS content
+  var promoContent=JSON.stringify(promoTxt||'PROMO');
+
   s.textContent=
-    // Bordo e colore prezzo
-    '.tag-small,.tag-large{border-color:'+editorSettings.borderColor+'!important;}'+
-    '.tpr{color:'+editorSettings.priceColor+'!important;}'+
-    // Dimensioni reali mm per stampa e anteprima
-    '.tag-small{width:'+smW+'mm!important;height:'+smH+'mm!important;aspect-ratio:'+smRatio+'!important;}'+
-    '.tag-large{width:'+lgW+'mm!important;height:'+lgH+'mm!important;aspect-ratio:'+lgRatio+'!important;}'+
-    // Prezzo centrato e non tocca i bordi
+    // Dimensioni e sfondo
+    '.tag-small{width:'+smW+'mm!important;height:'+smH+'mm!important;aspect-ratio:'+smRatio+'!important;border:'+bw+' solid '+bc+'!important;background:'+bg+'!important;'+shapeCSS+frameCSS+'}'+
+    '.tag-large{width:'+lgW+'mm!important;height:'+lgH+'mm!important;aspect-ratio:'+lgRatio+'!important;border:'+bw+' solid '+bc+'!important;background:'+bg+'!important;'+shapeCSS+frameCSS+'}'+
+    // Colore prezzo + dimensione
+    '.tag-small .tpr{color:'+editorSettings.priceColor+'!important;font-size:'+pfsm+'!important;}'+
+    '.tag-large .tpr{color:'+editorSettings.priceColor+'!important;font-size:'+pflg+'!important;}'+
+    // Prezzo barrato
+    '.tag-small .top2,.tag-large .top2{font-size:'+opf+'!important;}'+
+    // Nastro promo: dimensione testo
+    '.tag-small.cp::before{font-size:'+pf+'!important;content:'+promoContent+'!important;}'+
+    '.tag-large.cp::before{font-size:'+pf+'!important;content:'+promoContent+'!important;}'+
+    // Layout interno
     '.tpa{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:.5mm;padding:0 2mm;}'+
     '.tpr{display:block;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'+
-    // Stampa: forza mm reali
+    // Stampa
     '@media print{'+
       '.tag-small{width:'+smW+'mm!important;height:'+smH+'mm!important;max-width:'+smW+'mm!important;max-height:'+smH+'mm!important;}'+
       '.tag-large{width:'+lgW+'mm!important;height:'+lgH+'mm!important;max-width:'+lgW+'mm!important;max-height:'+lgH+'mm!important;}'+
@@ -1952,19 +2038,99 @@ function renderEditorPreview(){
   var prev=document.getElementById('ec-preview');
   if(!prev) return;
   var sample=[
-    {data:'09-03-2026',desc:'Esempio Articolo',codF:'00020-13/8',codM:'0329013',prezzoOld:'5,00',prezzo:'3,20',barrato:editorSettings.barrato?'si':'no',promo:'si',size:'small',note:''},
-    {data:'09-03-2026',desc:'Articolo Grande',codF:'04170-14/3',codM:'0308114',prezzoOld:'',prezzo:'139,00',barrato:'no',promo:'no',size:'large',note:''}
+    {data:'09-03-2026',desc:'Esempio Articolo',codF:'00020-13/8',codM:'0329013',prezzoOld:'5,00',prezzo:'3,20',barrato:editorSettings.barrato?'si':'no',promo:'si',giornalino:'rosso',size:'small',note:''},
+    {data:'09-03-2026',desc:'Articolo Grande',codF:'04170-14/3',codM:'0308114',prezzoOld:'',prezzo:'139,00',barrato:'no',promo:'no',giornalino:'',size:'large',note:''}
   ];
-  prev.innerHTML=buildTagsHTML(sample);
+  // Usa makeTag direttamente senza filtro removed[]
+  var sm=sample.filter(function(r){return r.size==='small';});
+  var lg=sample.filter(function(r){return r.size==='large';});
+  var h='';
+  for(var i=0;i<sm.length;i+=3) h+='<div class="tag-row">'+sm.slice(i,i+3).map(function(r){return makeTag(r,undefined);}).join('')+'</div>';
+  for(var i=0;i<lg.length;i+=2) h+='<div class="tag-row">'+lg.slice(i,i+2).map(function(r){return makeTag(r,undefined);}).join('')+'</div>';
+  prev.innerHTML=h;
 }
 
 function resetEditor(){
-  editorSettings={priceColor:'#000000',borderColor:'#aaaaaa',smW:67,smH:38,lgW:94,lgH:39,barrato:false};
+  editorSettings={
+    priceColor:'#000000',borderColor:'#aaaaaa',frameColor:'#aaaaaa',
+    smW:67,smH:38,lgW:94,lgH:39,barrato:false,
+    priceFontSm:26,priceFontLg:32,promoFont:6,oldPriceFont:10,borderWidth:0.5,
+    shape:'',frame:'',bg:'#ffffff',promoText:'PROMO'
+  };
   lsSet('cp4_editor',editorSettings);
   loadEditorSettings();
   applyEditorCSS();
   renderEditorPreview();
   genTags();
+}
+
+// ── Funzioni per i bottoni forma / cornice / sfondo / testo promo ──────────
+
+function ec_setShape(shape){
+  editorSettings.shape=shape;
+  lsSet('cp4_editor',editorSettings);
+  ec_highlightShape(shape);
+  applyEditorCSS();
+  renderEditorPreview();
+}
+function ec_highlightShape(shape){
+  document.querySelectorAll('.ec-shape-btn').forEach(function(b){
+    var active=(b.getAttribute('data-shape')===shape);
+    b.style.borderColor=active?'var(--accent)':'var(--border)';
+    b.style.color=active?'var(--accent)':'#ccc';
+    b.style.background=active?'rgba(245,196,0,.12)':'transparent';
+  });
+}
+
+function ec_setFrame(frame){
+  editorSettings.frame=frame;
+  lsSet('cp4_editor',editorSettings);
+  ec_highlightFrame(frame);
+  applyEditorCSS();
+  renderEditorPreview();
+}
+function ec_highlightFrame(frame){
+  document.querySelectorAll('.ec-frame-btn').forEach(function(b){
+    var active=(b.getAttribute('data-frame')===frame);
+    b.style.borderColor=active?'var(--accent)':'var(--border)';
+    b.style.color=active?'var(--accent)':'#ccc';
+    b.style.background=active?'rgba(245,196,0,.12)':'transparent';
+  });
+}
+
+function ec_setBg(color){
+  editorSettings.bg=color;
+  lsSet('cp4_editor',editorSettings);
+  ec_highlightBg(color);
+  applyEditorCSS();
+  renderEditorPreview();
+}
+function ec_highlightBg(color){
+  document.querySelectorAll('.ec-bg-btn').forEach(function(b){
+    // confronta normalizzando il colore
+    var active=(b.getAttribute('data-val')===color);
+    b.style.borderColor=active?'var(--accent)':'var(--border)';
+    b.style.borderWidth=active?'3px':'2px';
+    b.style.transform=active?'scale(1.15)':'scale(1)';
+  });
+}
+
+function ec_setPromoText(txt){
+  editorSettings.promoText=txt||'PROMO';
+  lsSet('cp4_editor',editorSettings);
+  var inp=document.getElementById('ec-promo-text');
+  if(inp && inp.value!==txt) inp.value=txt;
+  ec_highlightPromoBtn(txt);
+  applyEditorCSS();
+  renderEditorPreview();
+}
+function ec_highlightPromoBtn(txt){
+  document.querySelectorAll('.ec-promo-txt-btn').forEach(function(b){
+    var active=(b.getAttribute('data-val')===txt);
+    b.style.borderColor=active?'#e53e3e':'var(--border)';
+    b.style.background=active?'rgba(229,62,62,.15)':'transparent';
+    b.style.color=active?'#fc8181':'#888';
+  });
 }
 
 // resetAI rimossa - stub vuoto non pi- necessario

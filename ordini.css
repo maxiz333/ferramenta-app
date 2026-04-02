@@ -338,3 +338,33 @@ body.light-mode .dao-group-header { border-color:#ddd; }
 }
 body.light-mode .ord-card--bozza { background: #eff8ff !important; border-color: #3182ce55 !important; }
 body.light-mode .ord-card-stato--bozza { background: #dbeafe; color: #1d4ed8; }
+
+/* ── Card ex-bozza — ordine promosso da bozza a nuovo ── */
+.ord-card--exbozza {
+  border-color: #805ad555 !important;
+  border-top: 4px solid #805ad5 !important;
+}
+body.light-mode .ord-card--exbozza { border-color: #805ad555 !important; }
+
+/* ── Tasto elimina articolo (×) ── */
+.ord-item-del {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  font-size: 11px; font-weight: 900; line-height: 1;
+  color: #888; background: #2a2a2a;
+  cursor: pointer;
+  margin-left: 6px; vertical-align: middle;
+  transition: all .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.ord-item-del:hover, .ord-item-del:active { color: #fc8181; background: #e53e3e33; }
+.ord-item-del--confirm {
+  color: #fff !important;
+  background: #e53e3e !important;
+  font-size: 9px;
+  animation: delPulse .6s ease-in-out infinite;
+}
+@keyframes delPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.2)} }
+body.light-mode .ord-item-del { color: #999; background: #e8e8e8; }
+body.light-mode .ord-item-del:hover, body.light-mode .ord-item-del:active { color: #e53e3e; background: #fde8e8; }

@@ -284,6 +284,36 @@ function ordInlineEdit(el, gi, ii, field){
   });
 }
 
+// ── Rimuovi articolo dall'ordine (doppio tap) ───────────────────
+function ordDelItem(el, gi, ii){
+  if(el._confirm){
+    // Secondo tap — elimina
+    var ord = ordini[gi];
+    if(!ord || !ord.items[ii]) return;
+    ord.items.splice(ii, 1);
+    var tot = ord.items.reduce(function(s,x){ return s + parsePriceIT(x.prezzoUnit)*parseFloat(x.qty||0); }, 0);
+    ord.totale = tot.toFixed(2);
+    ord.modificato = true;
+    ord.modificatoAt = new Date().toLocaleString('it-IT');
+    ord.modificatoAtISO = new Date().toISOString();
+    saveOrdini();
+    var linkedCart = carrelli.find(function(c){ return c.ordId === ord.id; });
+    if(linkedCart){ linkedCart.items = JSON.parse(JSON.stringify(ord.items)); saveCarrelli(); }
+    renderOrdini();
+    showToastGen('red', 'Articolo rimosso');
+    return;
+  }
+  // Primo tap — chiedi conferma
+  el._confirm = true;
+  el.textContent = '?';
+  el.classList.add('ord-item-del--confirm');
+  setTimeout(function(){
+    el._confirm = false;
+    el.textContent = '×';
+    el.classList.remove('ord-item-del--confirm');
+  }, 2500);
+}
+
 // ── Inline edit prezzo su card bozza ─────────────────────────────
 function ordBozzaSetPrezzo(bozzaId, ii, el){
   if(el._editing) return;
@@ -344,7 +374,7 @@ function filterOrdini(f){
     var ll2=document.getElementById('ord-list');if(ll2)ll2.style.display='';
   }
   ordFiltro=f;
-  ['bozza','nuovo','lavorazione','pronto','completato','tutti'].forEach(function(x){
+  ['nuovo','lavorazione','pronto','completato','tutti'].forEach(function(x){
     var btn=document.getElementById('ord-f-'+x);if(!btn)return;
     var on=(x===f);
     btn.style.background=on?'var(--accent)':'transparent';
@@ -742,30 +772,23 @@ function renderOrdini(){
     }
   });
 
-  var bozze = ordini.filter(function(o){ return o.stato==='bozza'; });
-
-  // Se filtro attivo = bozza, mostra solo la sezione bozze (filtered sempre definita)
-  var filtered = [];
-  if(ordFiltro==='bozza'){
-    if(!bozze.length){
-      list.innerHTML='<div style="text-align:center;padding:60px 20px;color:#444;"><div style="font-size:40px;margin-bottom:8px;">📡</div>Nessun ordine in costruzione</div>';
-      return;
+  // Bozze incluse nel flusso normale (filtro "nuovo" o "tutti")
+  var filtered = ordini.filter(function(o){
+    if(o.stato==='bozza'){
+      // Le bozze appaiono solo in "nuovo" e "tutti"
+      if(ordFiltro!=='nuovo' && ordFiltro!=='tutti') return false;
+    } else {
+      if(ordFiltro!=='tutti' && o.stato!==ordFiltro) return false;
     }
-    // filtered resta [] — mostra solo bozze
-  } else {
-    filtered = ordini.filter(function(o){
-      if(o.stato==='bozza') return false;
-      if(ordFiltro!=='tutti'&&o.stato!==ordFiltro)return false;
-      if(!searchLow)return true;
-      var hay=(o.nomeCliente||'');
-      (o.items||[]).forEach(function(it){hay+=' '+(it.desc||'')+' '+(it.codF||'')+' '+(it.codM||'');});
-      return hay.toLowerCase().indexOf(searchLow)>=0;
-    });
-  }
+    if(!searchLow) return true;
+    var hay=(o.nomeCliente||'');
+    (o.items||[]).forEach(function(it){hay+=' '+(it.desc||'')+' '+(it.codF||'')+' '+(it.codM||'');});
+    return hay.toLowerCase().indexOf(searchLow)>=0;
+  });
 
   filtered.sort(function(a,b){return(b.createdAt||'').localeCompare(a.createdAt||'');});
 
-  if(!filtered.length && !bozze.length){
+  if(!filtered.length){
     list.innerHTML='<div style="text-align:center;padding:60px 20px;color:#444;"><div style="font-size:40px;margin-bottom:8px;">📋</div>'+(searchLow?'Nessun risultato':'Nessun ordine')+'</div>';
     return;
   }
@@ -775,89 +798,6 @@ function renderOrdini(){
   var SBG={nuovo:'#f5c400',lavorazione:'#3182ce',pronto:'#dd6b20',completato:'#38a169'};
 
   var h='';
-
-  // ── SEZIONE BOZZE ─────────────────────────────────────────────
-  if(bozze.length){
-    h+='<div class="ord-date-sep">';
-    h+='<span class="ord-date-line" style="background:#3182ce44;"></span>';
-    h+='<span class="ord-date-label" style="color:#63b3ed;">📡</span>';
-    h+='<span class="ord-date-line" style="background:#3182ce44;"></span>';
-    h+='</div>';
-    bozze.forEach(function(ord){
-      var gi=ordini.indexOf(ord);
-      var nArt=(ord.items||[]).length;
-      var tot=0;
-      (ord.items||[]).forEach(function(it){tot+=parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0);});
-      h+='<div class="ord-card ord-card--bozza" data-bozza-id="'+ord.id+'" style="position:relative;">';
-      // Banner pulsante
-      h+='<div class="ord-card-stato ord-card-stato--bozza">';
-      h+='📡 🔨 ⚡';
-      h+='</div>';
-      // Cliente
-      h+='<div class="ord-card-cliente">';
-      h+='<div class="ord-cliente-nome" style="color:#90cdf4;">'+esc(ord.nomeCliente||'—')+'</div>';
-      h+='<div class="ord-cliente-meta">';
-      h+=esc(ord.data||'')+(ord.ora?' · '+ord.ora:'');
-      h+=' · '+nArt+' articol'+(nArt===1?'o':'i')+' · <span style="color:#63b3ed;font-weight:700;">Dal banco</span>';
-      h+='</div>';
-      h+='</div>';
-      // Griglia articoli
-      h+='<div class="ord-items-wrap">';
-      h+='<div class="ord-grid ord-grid-head">';
-      h+='<div class="ord-gh">Prodotto</div>';
-      h+='<div class="ord-gh ord-gh-c">Qtà</div>';
-      h+='<div class="ord-gh ord-gh-c">Prezzo</div>';
-      h+='<div class="ord-gh ord-gh-c">Tot</div>';
-      h+='</div>';
-      (ord.items||[]).forEach(function(it,ii){
-        var pu=parsePriceIT(it.prezzoUnit);
-        var q=parseFloat(it.qty||0);
-        var sub=(pu*q).toFixed(2);
-        var prezzoManca=(!it.prezzoUnit||it.prezzoUnit==='0'||it.prezzoUnit===0||it.prezzoUnit==='');
-        h+='<div class="ord-grid ord-grid-row'+(ii%2===0?' ord-grid-even':' ord-grid-odd')+'">';
-        h+='<div class="ord-gc-desc">';
-        h+='<div class="ord-item-name">'+esc(it.desc||'—')+'</div>';
-        if(it.codM||it.codF){
-          h+='<div class="ord-item-codes">';
-          if(it.codM) h+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
-          if(it.codF) h+='<span class="ord-code-forn">'+esc(it.codF)+'</span>';
-          h+='</div>';
-        }
-        h+='</div>';
-        h+='<div class="ord-gc-qty">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
-        // Prezzo — editabile inline (l'ufficio può inserirlo)
-        h+='<div class="ord-gc-price ord-editable" onclick="ordBozzaSetPrezzo(\''+ord.id+'\','+ii+',this)" title="Tap per inserire prezzo">';
-        if(prezzoManca){
-          h+='<span style="color:#fc8181;font-size:11px;font-weight:800;">— €?</span>';
-        } else {
-          h+='€'+pu.toFixed(2);
-        }
-        h+='</div>';
-        h+='<div class="ord-gc-sub">';
-        if(prezzoManca){
-          h+='<span style="color:#555;font-size:11px;">—</span>';
-        } else {
-          h+='€'+sub;
-        }
-        h+='</div>';
-        h+='</div>';
-      });
-      h+='</div>';// fine ord-items-wrap
-      // Totale
-      h+='<div class="ord-total-bar">';
-      h+='<span class="ord-total-label">TOTALE</span>';
-      h+='<span class="ord-total-value" style="color:#63b3ed;">€ '+tot.toFixed(2)+(tot===0?' <span style="font-size:12px;color:#555;">prezzi da inserire</span>':'')+'</span>';
-      h+='</div>';
-      // Nota se presente
-      if(ord.nota){
-        h+='<div style="padding:6px 12px;font-size:12px;color:#f6ad55;white-space:pre-wrap;word-break:break-word;">📋 '+esc(ord.nota)+'</div>';
-      }
-      // Info
-      h+='<div style="padding:8px 14px 12px;font-size:11px;color:#3182ce;font-style:italic;">⚡ Ordine in costruzione dal banco — aggiornato in tempo reale</div>';
-      h+='</div>'; // fine ord-card--bozza
-      h+='<div class="ord-spacer"><div class="ord-spacer-line"></div></div>';
-    });
-  }
 
   // Raggruppa per data
   var gruppi={},gruppiOrd=[];
@@ -876,7 +816,7 @@ function renderOrdini(){
     gruppi[dk].push(o);
   });
 
-  // NON resettare h — contiene già le bozze renderizzate sopra
+  // Render ordini raggruppati per data (include bozze nel flusso)
   gruppiOrd.forEach(function(dk){
     // ── SEPARATORE DATA — banda piena ──
     h+='<div class="ord-date-sep">';
@@ -888,10 +828,77 @@ function renderOrdini(){
     gruppi[dk].forEach(function(ord,idxInGroup){
       var gi=ordini.indexOf(ord);
       var ost=ord.stato;
-      var sc=SC[ost]||'#555';
       var nArt=(ord.items||[]).length;
       var tot=0;
       (ord.items||[]).forEach(function(it){tot+=parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0);});
+
+      // ── BOZZA INLINE — card speciale dentro il flusso normale ──
+      if(ost==='bozza'){
+        h+='<div class="ord-card ord-card--bozza" data-bozza-id="'+ord.id+'" style="position:relative;">';
+        h+='<div class="ord-card-stato ord-card-stato--bozza">';
+        h+='📡 🔨 ⚡';
+        h+='</div>';
+        h+='<div class="ord-card-cliente">';
+        h+='<div class="ord-cliente-nome" style="color:#90cdf4;">'+esc(ord.nomeCliente||'—')+'</div>';
+        h+='<div class="ord-cliente-meta">';
+        h+=esc(ord.data||'')+(ord.ora?' · '+ord.ora:'');
+        h+=' · '+nArt+' articol'+(nArt===1?'o':'i')+' · <span style="color:#63b3ed;font-weight:700;">Dal banco</span>';
+        h+='</div></div>';
+        h+='<div class="ord-items-wrap">';
+        h+='<div class="ord-grid ord-grid-head">';
+        h+='<div class="ord-gh">Prodotto</div>';
+        h+='<div class="ord-gh ord-gh-c">Qtà</div>';
+        h+='<div class="ord-gh ord-gh-c">Prezzo</div>';
+        h+='<div class="ord-gh ord-gh-c">Tot</div>';
+        h+='</div>';
+        (ord.items||[]).forEach(function(it,ii){
+          var pu=parsePriceIT(it.prezzoUnit);
+          var q=parseFloat(it.qty||0);
+          var sub=(pu*q).toFixed(2);
+          var prezzoManca=(!it.prezzoUnit||it.prezzoUnit==='0'||it.prezzoUnit===0||it.prezzoUnit==='');
+          h+='<div class="ord-grid ord-grid-row'+(ii%2===0?' ord-grid-even':' ord-grid-odd')+'">';
+          h+='<div class="ord-gc-desc">';
+          h+='<div class="ord-item-name">'+esc(it.desc||'—')+'</div>';
+          if(it.codM||it.codF){
+            h+='<div class="ord-item-codes">';
+            if(it.codM) h+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
+            if(it.codF) h+='<span class="ord-code-forn">'+esc(it.codF)+'</span>';
+            h+='</div>';
+          }
+          h+='</div>';
+          h+='<div class="ord-gc-qty">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
+          h+='<div class="ord-gc-price ord-editable" onclick="ordBozzaSetPrezzo(\''+ord.id+'\','+ii+',this)" title="Tap per inserire prezzo">';
+          if(prezzoManca){
+            h+='<span style="color:#fc8181;font-size:11px;font-weight:800;">— €?</span>';
+          } else {
+            h+='€'+pu.toFixed(2);
+          }
+          h+='</div>';
+          h+='<div class="ord-gc-sub">';
+          if(prezzoManca){
+            h+='<span style="color:#555;font-size:11px;">—</span>';
+          } else {
+            h+='€'+sub;
+          }
+          h+='</div></div>';
+        });
+        h+='</div>';
+        h+='<div class="ord-total-bar">';
+        h+='<span class="ord-total-label">TOTALE</span>';
+        h+='<span class="ord-total-value" style="color:#63b3ed;">€ '+tot.toFixed(2)+(tot===0?' <span style="font-size:12px;color:#555;">prezzi da inserire</span>':'')+'</span>';
+        h+='</div>';
+        if(ord.nota){
+          h+='<div style="padding:6px 12px;font-size:12px;color:#f6ad55;white-space:pre-wrap;word-break:break-word;">📋 '+esc(ord.nota)+'</div>';
+        }
+        h+='<div style="padding:8px 14px 12px;font-size:11px;color:#3182ce;font-style:italic;">⚡ Ordine in costruzione dal banco — aggiornato in tempo reale</div>';
+        h+='</div>';
+        h+='<div class="ord-spacer"><div class="ord-spacer-line"></div></div>';
+        return; // skip rendering card normale
+      }
+
+      // ── Ex-bozza promossa a ordine: colore viola solo se ancora 'nuovo' ──
+      var _isExBozza = !!(ord.promozione);
+      var sc = (_isExBozza && ost==='nuovo') ? '#805ad5' : (SC[ost]||'#555');
 
       // ── CARD ORDINE — blocco massiccio con bordo colorato top ──
       var lockInfo = ordIsLockedByOther(ord.id);
@@ -906,7 +913,7 @@ function renderOrdini(){
       // Non editabile se: completato, ordine altrui, o bloccato da un altro account
       var _canEdit = !(isCompleted && !unlocked) && !_altruiOrdine && !lockInfo;
 
-      h+='<div class="ord-card'+(isCompleted&&!unlocked?' ord-card--done':'')+'" style="border-top:4px solid '+sc+';position:relative;">';
+      h+='<div class="ord-card'+(isCompleted&&!unlocked?' ord-card--done':'') + (_isExBozza&&ost==='nuovo'?' ord-card--exbozza':'')+'" style="border-top:4px solid '+sc+';position:relative;">';
 
       // OVERLAY ACCOUNT - ordine di un altro commesso (solo proprietario può toccare)
       if(_altruiOrdine && !lockInfo){
@@ -931,9 +938,15 @@ function renderOrdini(){
       }
 
       // ── HEADER: banda colorata con stato ──
-      h+='<div class="ord-card-stato" style="background:'+sc+';color:'+(ost==='nuovo'?'#111':'#fff')+'">';
-      h+=SL[ost];
+      var _bannerLabel = (_isExBozza && ost==='nuovo') ? ('📡 DA BOZZA') : SL[ost];
+      var _bannerTextCol = (ost==='nuovo' && !_isExBozza) ? '#111' : '#fff';
+      h+='<div class="ord-card-stato" style="background:'+sc+';color:'+_bannerTextCol+'">';
+      h+=_bannerLabel;
       if(ord.numero) h+=' — #'+ord.numero;
+      // Etichetta "da bozza" in piccolo se ex-bozza e NON in stato nuovo (dove il banner è già viola)
+      if(_isExBozza && ost!=='nuovo'){
+        h+=' <span style="font-size:9px;opacity:.7;font-weight:600;letter-spacing:.3px;vertical-align:middle;">📡 da bozza</span>';
+      }
       if(ord.modificato){
         var diffTxt = (ord.modificheDiff && ord.modificheDiff.length) ? ord.modificheDiff.join('\\n') : '';
         h+=' <span onclick="event.stopPropagation();ordMostraModifiche(\''+ord.id+'\')" style="background:#553c9a;color:#e9d8fd;font-size:10px;padding:1px 7px;border-radius:8px;letter-spacing:.5px;font-weight:700;vertical-align:middle;cursor:pointer;" title="Vedi modifiche">✏️ MODIFICATO</span>';
@@ -1058,6 +1071,7 @@ function renderOrdini(){
           }
           // Nota articolo
           h+='<button class="ord-mini-btn'+(hasNota2?' ord-mini-on':'')+'" onclick="ordEditNota('+gi+','+ii+')" title="Nota" style="margin-left:auto">📝</button>';
+          h+='<span class="ord-item-del" onclick="event.stopPropagation();ordDelItem(this,'+gi+','+ii+')" title="Rimuovi articolo">×</span>';
           h+='</div>';
         } else if(hasNota2||scOn2){
           h+='<div style="padding:1px 8px;font-size:9px;color:#666;">';
@@ -1138,16 +1152,6 @@ function _updateBozzaBadge(){
     }
   }
   _bozzaBadgeLast = nBozze;
-  // Tasto filtro "In costruzione" nella barra filtri
-  var btn=document.getElementById('ord-f-bozza');
-  var nbadge=document.getElementById('ord-f-bozza-n');
-  if(btn){
-    btn.style.display= nBozze>0 ? '' : 'none';
-    if(nbadge) nbadge.textContent= nBozze>0 ? nBozze : '';
-    if(nBozze===0 && typeof ordFiltro!=='undefined' && ordFiltro==='bozza'){
-      filterOrdini('tutti');
-    }
-  }
   // Badge 📡 sul tasto tab ordini nella bottom bar
   var bb=document.getElementById('bozza-badge');
   if(!bb){
@@ -1245,7 +1249,7 @@ function updateOrdCounter(){
   var icon='';
 
   if(ordFiltro==='nuovo'){
-    count=ordini.filter(function(o){return o.stato==='nuovo';}).length;
+    count=ordini.filter(function(o){return o.stato==='nuovo'||o.stato==='bozza';}).length;
     label='Nuov'+(count===1?'o':'i'); icon='🆕'; color='var(--accent)'; bg='linear-gradient(135deg,#1a1a00,#2a2a00)'; border='2px solid var(--accent)';
   } else if(ordFiltro==='lavorazione'){
     count=ordini.filter(function(o){return o.stato==='lavorazione';}).length;
@@ -1256,14 +1260,11 @@ function updateOrdCounter(){
   } else if(ordFiltro==='completato'){
     count=ordini.filter(function(o){return o.stato==='completato';}).length;
     label='Fatt'+(count===1?'o':'i'); icon='✅'; color='#68d391'; bg='#0d1a0d'; border='1px solid #38a16944';
-  } else if(ordFiltro==='bozza'){
-    count=ordini.filter(function(o){return o.stato==='bozza';}).length;
-    label=''; icon='📡'; color='#63b3ed'; bg='#0a1020'; border='1px solid #3182ce44';
   } else {
     // "tutti" — nessun contatore
     banner.style.display='none';
     var fc=document.getElementById('ord-filter-count');
-    if(fc){ fc.textContent=ordini.filter(function(o){return o.stato!=='bozza';}).length; }
+    if(fc){ fc.textContent=ordini.length; }
     return;
   }
 
