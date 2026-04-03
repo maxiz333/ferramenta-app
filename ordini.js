@@ -233,12 +233,6 @@ function ordInlineEdit(el, gi, ii, field){
   if(el.querySelector && el.querySelector('input.ord-inline-input')) return;
   var ord = ordini[gi];
   if(!ord || !ord.items[ii]) return;
-  // Controlla lock
-  var lockInfo = ordIsLockedByOther(ord.id);
-  if(lockInfo){
-    showToastGen('orange','🔒 ' + (lockInfo.name||'Altro account') + ' sta modificando questo ordine');
-    return;
-  }
   el._editing = true;
   var it = ord.items[ii];
   var oldVal = '';
@@ -247,14 +241,10 @@ function ordInlineEdit(el, gi, ii, field){
   else if(field === 'price'){ oldVal = it.prezzoUnit || ''; inputType = 'text'; }
   else if(field === 'codF'){ oldVal = it.codF || ''; }
 
-  // Inserisce l'input nel DOM PRIMA di acquisire il lock su Firebase
-  // così quando il listener Firebase triggera renderOrdini(),
-  // il check document.querySelector('.ord-inline-input') funziona correttamente
+  // Salva HTML originale per ripristino
   var origHTML = el.innerHTML;
   el.innerHTML = '<input type="'+inputType+'" value="'+oldVal+'" class="ord-inline-input"'+(field==='qty'?' min="0.5" step="0.5"':'')+'>';
   var inp = el.querySelector('input');
-  // Acquisisce il lock DOPO aver messo l'input nel DOM (evita race condition Firebase)
-  ordLock(ord.id);
   setTimeout(function(){ inp.focus(); inp.select(); }, 50);
 
   function save(){
@@ -285,7 +275,6 @@ function ordInlineEdit(el, gi, ii, field){
     saveOrdini();
     var linkedCart = carrelli.find(function(c){ return c.ordId === ord.id; });
     if(linkedCart){ linkedCart.items = JSON.parse(JSON.stringify(ord.items)); saveCarrelli(); }
-    ordUnlock(ord.id);
     renderOrdini();
   }
   inp.addEventListener('blur', save);
@@ -405,6 +394,8 @@ function setStatoOrdine(gi,stato){
   }
   ordLock(o.id);
   if(stato==='completato'){
+    console.log('[LOCK] setStatoOrdine — completato, rilascio lock');
+    ordUnlock(o.id);
     // ── Aggiorna prezzi nel database articoli ──────────────────
     _syncPrezziOrdineAlDB(o);
   }
@@ -412,10 +403,7 @@ function setStatoOrdine(gi,stato){
   if(!o.statiLog)o.statiLog={};
   o.statiLog[stato]={ora:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),data:new Date().toLocaleDateString('it-IT')};
   if(stato==='completato') o.completatoAtISO=new Date().toISOString();
-  saveOrdini();
-  // Rilascia lock subito dopo il cambio stato (azione istantanea)
-  ordUnlock(o.id);
-  renderOrdini();
+  saveOrdini();renderOrdini();
 }
 
 // ── Sync prezzi ordine completato → database articoli ────────────────────────
@@ -844,10 +832,73 @@ function renderOrdini(){
       var tot=0;
       (ord.items||[]).forEach(function(it){tot+=parsePriceIT(it.prezzoUnit)*parseFloat(it.qty||0);});
 
+      // ── BOZZA INLINE — card speciale dentro il flusso normale ──
+      if(ost==='bozza'){
+        h+='<div class="ord-card ord-card--bozza" data-bozza-id="'+ord.id+'" style="position:relative;">';
+        h+='<div class="ord-card-stato ord-card-stato--bozza">';
+        h+='📡 🔨 ⚡';
+        h+='</div>';
+        h+='<div class="ord-card-cliente">';
+        h+='<div class="ord-cliente-nome" style="color:#90cdf4;">'+esc(ord.nomeCliente||'—')+'</div>';
+        h+='<div class="ord-cliente-meta">';
+        h+=esc(ord.data||'')+(ord.ora?' · '+ord.ora:'');
+        h+=' · '+nArt+' articol'+(nArt===1?'o':'i')+' · <span style="color:#63b3ed;font-weight:700;">Dal banco</span>';
+        h+='</div></div>';
+        h+='<div class="ord-items-wrap">';
+        h+='<div class="ord-grid ord-grid-head">';
+        h+='<div class="ord-gh">Prodotto</div>';
+        h+='<div class="ord-gh ord-gh-c">Qtà</div>';
+        h+='<div class="ord-gh ord-gh-c">Prezzo</div>';
+        h+='<div class="ord-gh ord-gh-c">Tot</div>';
+        h+='</div>';
+        (ord.items||[]).forEach(function(it,ii){
+          var pu=parsePriceIT(it.prezzoUnit);
+          var q=parseFloat(it.qty||0);
+          var sub=(pu*q).toFixed(2);
+          var prezzoManca=(!it.prezzoUnit||it.prezzoUnit==='0'||it.prezzoUnit===0||it.prezzoUnit==='');
+          h+='<div class="ord-grid ord-grid-row'+(ii%2===0?' ord-grid-even':' ord-grid-odd')+'">';
+          h+='<div class="ord-gc-desc">';
+          h+='<div class="ord-item-name">'+esc(it.desc||'—')+'</div>';
+          if(it.codM||it.codF){
+            h+='<div class="ord-item-codes">';
+            if(it.codM) h+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
+            if(it.codF) h+='<span class="ord-code-forn">'+esc(it.codF)+'</span>';
+            h+='</div>';
+          }
+          h+='</div>';
+          h+='<div class="ord-gc-qty">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
+          h+='<div class="ord-gc-price ord-editable" onclick="ordBozzaSetPrezzo(\''+ord.id+'\','+ii+',this)" title="Tap per inserire prezzo">';
+          if(prezzoManca){
+            h+='<span style="color:#fc8181;font-size:11px;font-weight:800;">— €?</span>';
+          } else {
+            h+='€'+pu.toFixed(2);
+          }
+          h+='</div>';
+          h+='<div class="ord-gc-sub">';
+          if(prezzoManca){
+            h+='<span style="color:#555;font-size:11px;">—</span>';
+          } else {
+            h+='€'+sub;
+          }
+          h+='</div></div>';
+        });
+        h+='</div>';
+        h+='<div class="ord-total-bar">';
+        h+='<span class="ord-total-label">TOTALE</span>';
+        h+='<span class="ord-total-value" style="color:#63b3ed;">€ '+tot.toFixed(2)+(tot===0?' <span style="font-size:12px;color:#555;">prezzi da inserire</span>':'')+'</span>';
+        h+='</div>';
+        if(ord.nota){
+          h+='<div style="padding:6px 12px;font-size:12px;color:#f6ad55;white-space:pre-wrap;word-break:break-word;">📋 '+esc(ord.nota)+'</div>';
+        }
+        h+='<div style="padding:8px 14px 12px;font-size:11px;color:#3182ce;font-style:italic;">⚡ Ordine in costruzione dal banco — aggiornato in tempo reale</div>';
+        h+='</div>';
+        h+='<div class="ord-spacer"><div class="ord-spacer-line"></div></div>';
+        return; // skip rendering card normale
+      }
+
       // ── Ex-bozza promossa a ordine: colore viola solo se ancora 'nuovo' ──
       var _isExBozza = !!(ord.promozione);
-      var _isBozza = (ost==='bozza');
-      var sc = _isBozza ? '#3182ce' : ((_isExBozza && ost==='nuovo') ? '#805ad5' : (SC[ost]||'#555'));
+      var sc = (_isExBozza && ost==='nuovo') ? '#805ad5' : (SC[ost]||'#555');
 
       // ── CARD ORDINE — blocco massiccio con bordo colorato top ──
       var lockInfo = ordIsLockedByOther(ord.id);
@@ -856,10 +907,24 @@ function renderOrdini(){
 
       // Calcolo ruolo/permessi PRIMA degli overlay (usati subito sotto)
       var _myKey = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.key : null;
-      // Editabile se: non completato (o sbloccato) e non locked da un altro
-      var _canEdit = !(isCompleted && !unlocked) && !lockInfo;
+      var _myRuolo = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.ruolo : 'proprietario';
+      var _ordCommesso = ord.commesso || null;
+      var _altruiOrdine = (_myRuolo !== 'proprietario' && _ordCommesso && _ordCommesso !== _myKey);
+      // Non editabile se: completato, ordine altrui, o bloccato da un altro account
+      var _canEdit = !(isCompleted && !unlocked) && !_altruiOrdine && !lockInfo;
 
-      h+='<div class="ord-card'+(isCompleted&&!unlocked?' ord-card--done':'') + (_isExBozza&&ost==='nuovo'?' ord-card--exbozza':'') + (_isBozza?' ord-card--bozza':'')+'" style="border-top:4px solid '+sc+';position:relative;">';
+      h+='<div class="ord-card'+(isCompleted&&!unlocked?' ord-card--done':'') + (_isExBozza&&ost==='nuovo'?' ord-card--exbozza':'')+'" style="border-top:4px solid '+sc+';position:relative;">';
+
+      // OVERLAY ACCOUNT - ordine di un altro commesso (solo proprietario può toccare)
+      if(_altruiOrdine && !lockInfo){
+        h+='<div class="ord-lock-overlay" onclick="ordDblTap(this,\'force\',\''+ord.id+'\','+gi+')">';
+        h+='<div class="ord-lock-msg">';
+        h+='<div style="font-size:24px;margin-bottom:6px">🔐</div>';
+        var _ordNomeCommesso = (typeof _roles !== 'undefined' && _roles[_ordCommesso]) ? _roles[_ordCommesso].nome : (_ordCommesso || 'altro account');
+        h+='<div style="font-size:14px;font-weight:800">ORDINE DI '+esc(_ordNomeCommesso).toUpperCase()+'</div>';
+        h+='<div style="font-size:10px;margin-top:8px;color:#666">Solo il proprietario può modificarlo</div>';
+        h+='</div></div>';
+      }
 
       // OVERLAY LOCK - se un altro dispositivo sta lavorando
       if(lockInfo){
@@ -873,10 +938,9 @@ function renderOrdini(){
       }
 
       // ── HEADER: banda colorata con stato ──
-      var _bannerLabel = _isBozza ? '📡 🔨 ⚡' : ((_isExBozza && ost==='nuovo') ? ('📡 DA BOZZA') : SL[ost]);
-      var _bannerTextCol = _isBozza ? '#63b3ed' : ((ost==='nuovo' && !_isExBozza) ? '#111' : '#fff');
-      var _bannerBg = _isBozza ? '#1a2744' : sc;
-      h+='<div class="ord-card-stato'+ (_isBozza?' ord-card-stato--bozza':'')+'" style="background:'+_bannerBg+';color:'+_bannerTextCol+'">';
+      var _bannerLabel = (_isExBozza && ost==='nuovo') ? ('📡 DA BOZZA') : SL[ost];
+      var _bannerTextCol = (ost==='nuovo' && !_isExBozza) ? '#111' : '#fff';
+      h+='<div class="ord-card-stato" style="background:'+sc+';color:'+_bannerTextCol+'">';
       h+=_bannerLabel;
       if(ord.numero) h+=' — #'+ord.numero;
       // Etichetta "da bozza" in piccolo se ex-bozza e NON in stato nuovo (dove il banner è già viola)
@@ -911,7 +975,7 @@ function renderOrdini(){
       h+='<div class="ord-gh ord-gh-c">Tot</div>';
       h+='</div>';
 
-      // _myKey, _canEdit — già calcolati sopra
+      // _myKey, _myRuolo, _ordCommesso, _altruiOrdine, _canEdit — già calcolati sopra
 
       (ord.items||[]).forEach(function(it,ii){
         var pu=parsePriceIT(it.prezzoUnit);
@@ -1053,10 +1117,6 @@ function renderOrdini(){
           h+='<button onclick="setStatoOrdine('+gi+',\'nuovo\')" class="ord-abtn ord-abtn--reopen">↩️ Riapri</button>';
         }
         h+='<button onclick="openCassa('+gi+')" class="ord-abtn ord-abtn--cassa">💰 Cassa</button>';
-        // ── Bottone Modifica esplicito per ex-bozze (viola) e bozze ──
-        if((_isExBozza || _isBozza) && _canEdit){
-          h+='<button onclick="modificaOrdineDaTab('+gi+')" class="ord-abtn ord-abtn--edit" style="background:rgba(128,90,213,.2);border:1px solid #805ad5;color:#b794f4;">✏️ Modifica</button>';
-        }
         h+='</div>';
         h+='<div class="ord-actions ord-actions-sec">';
         h+='<button onclick="ordStampaDblTap(this,'+gi+')" class="ord-abtn ord-abtn--print">🖨️ Stampa</button>';
