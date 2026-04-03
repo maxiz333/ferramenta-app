@@ -2024,8 +2024,6 @@ function avvisaUfficio(cartId){
     commesso:cart.commesso||''
   };
   ordini.unshift(bozza);
-  // Acquisisce il lock sulla bozza: il Banco è il proprietario finché non invia l'ordine vero
-  ordLock(bozzaId);
   saveOrdini();
   cart.bozzaOrdId=bozzaId;
   saveCarrelli();
