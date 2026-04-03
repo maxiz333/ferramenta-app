@@ -1133,6 +1133,11 @@ function _cassaModeOpen(){
     document.body.appendChild(cm);
   }
   cm.style.display = 'flex';
+  // Carica database articoli se non ancora caricato (serve per sync prezzi al completamento)
+  if(!rows.length && typeof loadMagazzinoFB === 'function'){
+    _magExtLoaded = false;
+    loadMagazzinoFB();
+  }
   // Avvia auto-refresh ordini in cassa
   _cassaModeRender();
   _cassaModeStartRefresh();

@@ -233,6 +233,13 @@ function ordInlineEdit(el, gi, ii, field){
   if(el.querySelector && el.querySelector('input.ord-inline-input')) return;
   var ord = ordini[gi];
   if(!ord || !ord.items[ii]) return;
+  // Controlla lock
+  var lockInfo = ordIsLockedByOther(ord.id);
+  if(lockInfo){
+    showToastGen('orange','🔒 ' + (lockInfo.name||'Altro account') + ' sta modificando questo ordine');
+    return;
+  }
+  ordLock(ord.id);
   el._editing = true;
   var it = ord.items[ii];
   var oldVal = '';
@@ -275,6 +282,7 @@ function ordInlineEdit(el, gi, ii, field){
     saveOrdini();
     var linkedCart = carrelli.find(function(c){ return c.ordId === ord.id; });
     if(linkedCart){ linkedCart.items = JSON.parse(JSON.stringify(ord.items)); saveCarrelli(); }
+    ordUnlock(ord.id);
     renderOrdini();
   }
   inp.addEventListener('blur', save);
@@ -394,8 +402,6 @@ function setStatoOrdine(gi,stato){
   }
   ordLock(o.id);
   if(stato==='completato'){
-    console.log('[LOCK] setStatoOrdine — completato, rilascio lock');
-    ordUnlock(o.id);
     // ── Aggiorna prezzi nel database articoli ──────────────────
     _syncPrezziOrdineAlDB(o);
   }
@@ -403,7 +409,10 @@ function setStatoOrdine(gi,stato){
   if(!o.statiLog)o.statiLog={};
   o.statiLog[stato]={ora:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),data:new Date().toLocaleDateString('it-IT')};
   if(stato==='completato') o.completatoAtISO=new Date().toISOString();
-  saveOrdini();renderOrdini();
+  saveOrdini();
+  // Rilascia lock subito dopo il cambio stato (azione istantanea)
+  ordUnlock(o.id);
+  renderOrdini();
 }
 
 // ── Sync prezzi ordine completato → database articoli ────────────────────────
