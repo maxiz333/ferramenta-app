@@ -112,30 +112,39 @@ var _editOrdItems=null;
 function modificaOrdineDaTab(gi){
   var ord=ordini[gi];
   if(!ord){ console.error('[LOCK] modificaOrdineDaTab — ordine non trovato a indice:', gi); return; }
-  var lockInfo = ordIsLockedByOther(ord.id);
-  if(lockInfo){
-    console.warn('[LOCK] modificaOrdineDaTab BLOCCATA — ordine:', ord.id, 'bloccato da:', lockInfo.by, '(', lockInfo.name, ')');
-    showToastGen('orange','🔒 ' + (lockInfo.name||'Altro account') + ' sta modificando questo ordine');
+  var oid = ord.id;
+  var blocco = ordIsLockedByOther(oid);
+  if(blocco){
+    showToastGen('orange','🔒 ' + (blocco.name||'Altro account') + ' sta modificando questo ordine');
     return;
   }
-  console.log('[LOCK] modificaOrdineDaTab — acquisisco lock su ordine:', ord.id);
-  ordLock(ord.id);
-  _editOrdIdx=gi;
-  _editOrdItems=JSON.parse(JSON.stringify(ord.items));
-  renderEditOrdine();
-  document.getElementById('edit-ord-overlay').style.display='flex';
+  ordAcquireOrderLock(oid, { force: false }, function(ok){
+    if(!ok){
+      showToastGen('orange','🔒 Ordine appena preso da un altro utente — riprova tra poco');
+      return;
+    }
+    var gi2 = ordini.findIndex(function(o){ return o && o.id === oid; });
+    if(gi2 < 0){
+      ordUnlock(oid);
+      return;
+    }
+    _editOrdIdx = gi2;
+    _editOrdItems = JSON.parse(JSON.stringify(ordini[gi2].items || []));
+    renderEditOrdine();
+    document.getElementById('edit-ord-overlay').style.display='flex';
+  });
 }
 
 function renderEditOrdine(){
   var ord=ordini[_editOrdIdx];
   if(!ord)return;
   var items=_editOrdItems;
-  var tot=items.reduce(function(s,it){return s+(_prezzoEffettivo(it)*parseFloat(it.qty||0));},0);
+  var tot=items.reduce(function(s,it){return s+(ordItemLineUnitSelling(it)*parseFloat(it.qty||0));},0);
   var h='';
   h+='<div style="font-size:15px;font-weight:900;color:#b794f4;margin-bottom:4px;">-- Modifica ordine'+(ord.numero?' #'+ord.numero:'')+'</div>';
   h+='<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">'+esc(ord.nomeCliente)+' - '+ord.data+' '+ord.ora+'</div>';
   items.forEach(function(it,idx){
-    var p=parsePriceIT(it.prezzoUnit);
+    var p=ordItemLineUnitSelling(it);
     var q=parseFloat(it.qty||0);
     var sub=(p*q).toFixed(2);
     var isSc=it.scampolo||false;
@@ -177,13 +186,17 @@ function _editOrdRemove(idx){_editOrdItems.splice(idx,1);renderEditOrdine();}
 function _editOrdCycleScampolo(idx){
   var it=_editOrdItems[idx];
   if(!it.scampolo&&!it.fineRotolo){
-    if(!it._prezzoOriginale)it._prezzoOriginale=it.prezzoUnit;
+    if(!ensurePrezzoOriginaleDaListino(it, true)){
+      showToastGen('orange','Listino non disponibile per questo articolo');
+      return;
+    }
     it.scampolo=true;it.fineRotolo=false;it._scontoTipo='scampolo';
-    if(!it._scontoApplicato)it._scontoApplicato=30;
+    if(!it._scontoApplicato)it._scontoApplicato=SCONTO_SCAMPOLO_DEFAULT_PCT;
     _applicaScontoScampolo(it);
   } else if(it.scampolo){
+    if(!ensurePrezzoOriginaleDaListino(it, true)) return;
     it.scampolo=false;it.fineRotolo=true;it._scontoTipo='rotolo';
-    if(!it._scontoApplicato||it._scontoApplicato===30)it._scontoApplicato=50;
+    it._scontoApplicato = SCONTO_ROTOLO_DEFAULT_PCT;
     _applicaScontoScampolo(it);
   } else {
     it.scampolo=false;it.fineRotolo=false;
@@ -193,19 +206,28 @@ function _editOrdCycleScampolo(idx){
   renderEditOrdine();
 }
 function _editOrdSconto(idx,val){
-  _editOrdItems[idx]._scontoApplicato=parseFloat(val)||0;
-  _applicaScontoScampolo(_editOrdItems[idx]);
+  var it=_editOrdItems[idx];
+  it._scontoApplicato=parseFloat(val)||0;
+  if(!ensurePrezzoOriginaleDaListino(it, true)){
+    showToastGen('orange','Listino non disponibile');
+    renderEditOrdine();
+    return;
+  }
+  _applicaScontoScampolo(it);
   renderEditOrdine();
 }
 function salvaEditOrdine(){
   var ord=ordini[_editOrdIdx];
   if(!ord){ console.error('[LOCK] salvaEditOrdine — nessun ordine a indice:', _editOrdIdx); return; }
   ord.items=JSON.parse(JSON.stringify(_editOrdItems));
-  var tot=_editOrdItems.reduce(function(s,it){return s+(_prezzoEffettivo(it)*parseFloat(it.qty||0));},0);
+  var tot=_editOrdItems.reduce(function(s,it){return s+(ordItemLineUnitSelling(it)*parseFloat(it.qty||0));},0);
   ord.totale=tot.toFixed(2);
   ord.modificato=true;ord.modificatoAt=new Date().toLocaleString('it-IT');ord.modificatoAtISO=new Date().toISOString();
   saveOrdini();
   var linkedCart=carrelli.find(function(c){return c.ordId===ord.id;});
+  if(!linkedCart && ord.stato==='bozza'){
+    linkedCart=carrelli.find(function(c){return c.bozzaOrdId===ord.id;});
+  }
   if(linkedCart){
     console.log('[LOCK] salvaEditOrdine — sync prezzi su carrello collegato:', linkedCart.id);
     linkedCart.items=JSON.parse(JSON.stringify(_editOrdItems));
@@ -255,6 +277,7 @@ function ordInlineEdit(el, gi, ii, field){
       if(!nq || nq <= 0) nq = parseFloat(it.qty)||1;
       it.qty = nq;
       // Ricalcola prezzo scaglionato
+      ensurePrezzoOriginaleDaListino(it, false);
       if(it._scaglionato && it._prezzoOriginale && it._scontoApplicato > 0){
         if(nq >= (it._scaglioneQta||10)){
           it.prezzoUnit = (parsePriceIT(it._prezzoOriginale)*(1-it._scontoApplicato/100)).toFixed(2);
@@ -274,6 +297,9 @@ function ordInlineEdit(el, gi, ii, field){
     ord.modificatoAtISO = new Date().toISOString();
     saveOrdini();
     var linkedCart = carrelli.find(function(c){ return c.ordId === ord.id; });
+    if(!linkedCart && ord.stato === 'bozza'){
+      linkedCart = carrelli.find(function(c){ return c.bozzaOrdId === ord.id; });
+    }
     if(linkedCart){ linkedCart.items = JSON.parse(JSON.stringify(ord.items)); saveCarrelli(); }
     renderOrdini();
   }
@@ -298,6 +324,9 @@ function ordDelItem(el, gi, ii){
     ord.modificatoAtISO = new Date().toISOString();
     saveOrdini();
     var linkedCart = carrelli.find(function(c){ return c.ordId === ord.id; });
+    if(!linkedCart && ord.stato === 'bozza'){
+      linkedCart = carrelli.find(function(c){ return c.bozzaOrdId === ord.id; });
+    }
     if(linkedCart){ linkedCart.items = JSON.parse(JSON.stringify(ord.items)); saveCarrelli(); }
     renderOrdini();
     showToastGen('red', 'Articolo rimosso');
@@ -312,40 +341,6 @@ function ordDelItem(el, gi, ii){
     el.textContent = '×';
     el.classList.remove('ord-item-del--confirm');
   }, 2500);
-}
-
-// ── Inline edit prezzo su card bozza ─────────────────────────────
-function ordBozzaSetPrezzo(bozzaId, ii, el){
-  if(el._editing) return;
-  if(el.querySelector && el.querySelector('input.ord-inline-input')) return;
-  var ord = ordini.find(function(o){ return o.id === bozzaId; });
-  if(!ord || !ord.items[ii]) return;
-  el._editing = true;
-  var it = ord.items[ii];
-  var oldVal = it.prezzoUnit || '';
-  el.innerHTML = '<input type="text" value="'+oldVal+'" placeholder="0.00" class="ord-inline-input">';
-  var inp = el.querySelector('input');
-  setTimeout(function(){ inp.focus(); inp.select(); }, 50);
-  function save(){
-    el._editing = false;
-    var v = inp.value.trim();
-    if(v) it.prezzoUnit = v;
-    var tot = ord.items.reduce(function(s,x){ return s + parsePriceIT(x.prezzoUnit)*parseFloat(x.qty||0); },0);
-    ord.totale = tot.toFixed(2);
-    saveOrdini();
-    // Sync prezzo nel carrello collegato
-    var cartCollegato = carrelli.find(function(c){ return c.bozzaOrdId === bozzaId; });
-    if(cartCollegato && cartCollegato.items && cartCollegato.items[ii]){
-      cartCollegato.items[ii].prezzoUnit = it.prezzoUnit;
-      saveCarrelli();
-    }
-    renderOrdini();
-  }
-  inp.addEventListener('blur', save);
-  inp.addEventListener('keydown', function(e){
-    if(e.key === 'Enter'){ e.preventDefault(); inp.blur(); }
-    if(e.key === 'Escape'){ inp.value = oldVal; inp.blur(); }
-  });
 }
 
 function filterOrdini(f){
@@ -392,12 +387,11 @@ function setStatoOrdine(gi,stato){
     showToastGen('orange','🔒 ' + (lockInfo.name||'Altro account') + ' sta lavorando su questo ordine');
     return;
   }
-  ordLock(o.id);
   if(stato==='completato'){
-    console.log('[LOCK] setStatoOrdine — completato, rilascio lock');
     ordUnlock(o.id);
-    // ── Aggiorna prezzi nel database articoli ──────────────────
     _syncPrezziOrdineAlDB(o);
+  } else if(stato==='pronto'){
+    ordUnlock(o.id);
   }
   o.stato=stato;
   if(!o.statiLog)o.statiLog={};
@@ -406,15 +400,19 @@ function setStatoOrdine(gi,stato){
   saveOrdini();renderOrdini();
 }
 
-// ── Sync prezzi ordine completato → database articoli ────────────────────────
-// Per ogni articolo dell'ordine, se ha un prezzo, aggiorna rows[].prezzo
-// Il prezzo vecchio va in prezzoOld e priceHistory (max 3)
+// ── Sync ordine completato → database articoli ───────────────────────────────
+// Aggiorna prezzo, qty (scarico), unit nel database per ogni articolo dell'ordine.
+// Chiamata sia da setStatoOrdine che da _cassaModeFatto — comportamento identico.
 function _syncPrezziOrdineAlDB(ord){
   if(!ord || !ord.items || !ord.items.length) return;
-  var aggiornati = 0;
+  var aggiornatiPrezzi = 0;
+  var aggiornatiQty = 0;
+  var sottoScortaList = [];
+
   ord.items.forEach(function(it){
     var prezzoOrd = it.prezzoUnit;
-    if(!prezzoOrd || prezzoOrd === '0' || prezzoOrd === '') return;
+    var qVenduta = parseFloat(it.qty || 0);
+
     // Trova articolo nel database
     var dbIdx = -1;
     if(it.rowIdx !== undefined && it.rowIdx !== null && rows[it.rowIdx]) dbIdx = it.rowIdx;
@@ -424,35 +422,79 @@ function _syncPrezziOrdineAlDB(ord){
       }
     }
     if(dbIdx < 0 || !rows[dbIdx]) return;
+
     var r = rows[dbIdx];
-    // Se il prezzo è uguale, non fare nulla
-    if(r.prezzo === prezzoOrd) return;
-    // Archivia prezzo corrente → prezzoOld + priceHistory
-    if(r.prezzo){
-      if(!r.priceHistory) r.priceHistory = [];
-      // Salva anche il prezzoOld attuale nello storico (se diverso)
-      if(r.prezzoOld && r.prezzoOld !== r.prezzo){
-        // prezzoOld va in coda allo storico se non c'è già
-        var giaNello = r.priceHistory.some(function(p){ return p.prezzo === r.prezzoOld; });
-        if(!giaNello) r.priceHistory.push({ prezzo: r.prezzoOld, data: '' });
+    var m = magazzino[dbIdx] || {};
+    var changed = false;
+
+    // ── 1. Aggiorna prezzo ──────────────────────────────────────
+    if(prezzoOrd && prezzoOrd !== '0' && prezzoOrd !== '' && r.prezzo !== prezzoOrd){
+      if(r.prezzo){
+        if(!r.priceHistory) r.priceHistory = [];
+        if(r.prezzoOld && r.prezzoOld !== r.prezzo){
+          var giaNello = r.priceHistory.some(function(p){ return p.prezzo === r.prezzoOld; });
+          if(!giaNello) r.priceHistory.push({ prezzo: r.prezzoOld, data: '' });
+        }
+        r.prezzoOld = r.prezzo;
+        r.priceHistory.unshift({ prezzo: r.prezzo, data: r.data || '' });
+        if(r.priceHistory.length > 5) r.priceHistory.length = 5;
       }
-      r.prezzoOld = r.prezzo;
-      // Aggiungi il prezzo corrente in cima allo storico
-      r.priceHistory.unshift({ prezzo: r.prezzo, data: r.data || '' });
-      // Max 5 nello storico
-      if(r.priceHistory.length > 5) r.priceHistory.length = 5;
+      r.prezzo = prezzoOrd;
+      r.data = new Date().toLocaleDateString('it-IT');
+      r.size = (typeof autoSize === 'function') ? autoSize(prezzoOrd) : r.size;
+      changed = true;
+      aggiornatiPrezzi++;
     }
-    // Scrivi nuovo prezzo
-    r.prezzo = prezzoOrd;
-    r.data = new Date().toLocaleDateString('it-IT');
-    r.size = (typeof autoSize === 'function') ? autoSize(prezzoOrd) : r.size;
-    // Salva su Firebase
-    if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(dbIdx);
-    aggiornati++;
+
+    // ── 2. Aggiorna unità di misura ─────────────────────────────
+    if(it.unit && it.unit !== (m.unit || 'pz')){
+      m.unit = it.unit;
+      changed = true;
+    }
+
+    // ── 3. Scarico magazzino (qty) ──────────────────────────────
+    if(qVenduta > 0 && m.qty !== undefined && m.qty !== ''){
+      var prevQty = Number(m.qty);
+      var nuovaQty = Math.max(0, prevQty - qVenduta);
+      m.qty = nuovaQty;
+      magazzino[dbIdx] = m;
+      lsSet(MAGK, magazzino);
+      if(typeof updateStockBadge === 'function') updateStockBadge();
+      if(typeof registraMovimento === 'function'){
+        registraMovimento(dbIdx, 'ordine', -qVenduta, prevQty, nuovaQty, 'Ordine #' + (ord.numero || ord.id));
+      }
+      // Controlla scorta minima
+      var soglia = (typeof getSoglia === 'function') ? getSoglia(dbIdx) : (m.soglia !== undefined ? Number(m.soglia) : 1);
+      if(nuovaQty <= soglia){
+        sottoScortaList.push({ desc: r.desc || it.desc || '?', qty: nuovaQty, soglia: soglia });
+      }
+      changed = true;
+      aggiornatiQty++;
+    }
+
+    if(changed){
+      if(typeof _fbSaveArticolo === 'function') _fbSaveArticolo(dbIdx);
+    }
   });
-  if(aggiornati){
-    lsSet(SK, rows);
-    showToastGen('green', '💰 ' + aggiornati + ' prezz' + (aggiornati === 1 ? 'o aggiornato' : 'i aggiornati') + ' nel database');
+
+  if(aggiornatiPrezzi) lsSet(SK, rows);
+
+  // Toast riepilogo
+  var parts = [];
+  if(aggiornatiPrezzi) parts.push(aggiornatiPrezzi + ' prezz' + (aggiornatiPrezzi === 1 ? 'o' : 'i'));
+  if(aggiornatiQty) parts.push(aggiornatiQty + ' qt' + (aggiornatiQty === 1 ? 'à' : 'à'));
+  if(parts.length){
+    showToastGen('green', '💰 Aggiornati: ' + parts.join(' · '));
+  }
+
+  // Avvisi scorta bassa (ritardati per non sovrapporsi al toast completato)
+  if(sottoScortaList.length){
+    setTimeout(function(){
+      var msg = '⚠️ SOTTO SCORTA:\n' + sottoScortaList.map(function(s){
+        return s.desc + ' — rimasti ' + s.qty + ' (min: ' + s.soglia + ')';
+      }).join('\n');
+      showToastGen('red', msg.trim());
+    }, 1800);
   }
 }
 var ORDK_CESTINO = 'cp4_ordini_cestino';
@@ -856,31 +898,86 @@ function renderOrdini(){
           var q=parseFloat(it.qty||0);
           var sub=(pu*q).toFixed(2);
           var prezzoManca=(!it.prezzoUnit||it.prezzoUnit==='0'||it.prezzoUnit===0||it.prezzoUnit==='');
+
+          var prezOrigNum=0;
+          var prezFinNum=pu;
+          var hasSconto=false;
+          var scOn=it.scampolo||it.fineRotolo||it._scaglionato||false;
+          var scagAtt=it._scaglioneAttivo||null;
+          if(scagAtt && it._prezzoBase){
+            prezOrigNum=parsePriceIT(it._prezzoBase);
+            hasSconto=prezOrigNum>prezFinNum+0.005;
+          } else if((scOn||(it._scontoApplicato&&it._scontoApplicato>0))&&it._prezzoOriginale){
+            prezOrigNum=parsePriceIT(it._prezzoOriginale);
+            hasSconto=prezOrigNum>prezFinNum+0.005;
+          }
+
           h+='<div class="ord-grid ord-grid-row'+(ii%2===0?' ord-grid-even':' ord-grid-odd')+'">';
           h+='<div class="ord-gc-desc">';
-          h+='<div class="ord-item-name">'+esc(it.desc||'—')+'</div>';
-          if(it.codM||it.codF){
-            h+='<div class="ord-item-codes">';
-            if(it.codM) h+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
-            if(it.codF) h+='<span class="ord-code-forn">'+esc(it.codF)+'</span>';
-            h+='</div>';
-          }
+          h+='<div class="ord-item-name" onclick="openSchedaFromOrdine('+gi+','+ii+')" style="cursor:pointer;">'+esc(it.desc||'\u2014')+'</div>';
+          var codesB='';
+          if(it.codM) codesB+='<span class="ord-code-mag">'+esc(it.codM)+'</span>';
+          codesB+='<span class="ord-code-forn ord-editable" onclick="ordInlineEdit(this,'+gi+','+ii+',\'codF\')" title="Tap per modificare">'+esc(it.codF||'—')+'</span>';
+          h+='<div class="ord-item-codes">'+codesB+'</div>';
+          if(it.nota) h+='<div class="ord-item-nota">📝 '+esc(it.nota)+'</div>';
+          if(it.daOrdinare) h+='<div class="ord-item-daord">🚚 DA ORDINARE</div>';
           h+='</div>';
-          h+='<div class="ord-gc-qty">'+q+'<span class="ord-unit">'+esc(it.unit||'pz')+'</span></div>';
-          h+='<div class="ord-gc-price ord-editable" onclick="ordBozzaSetPrezzo(\''+ord.id+'\','+ii+',this)" title="Tap per inserire prezzo">';
-          if(prezzoManca){
+
+          h+='<div class="ord-gc-qty ord-editable" onclick="ordInlineEdit(this,'+gi+','+ii+',\'qty\')" title="Tap per modificare">'+q;
+          h+='<select class="ord-unit-select" onclick="event.stopPropagation()" onchange="ordSetUnit('+gi+','+ii+',this.value)">';
+          var unitsB=['pz','mt','kg','lt','cf','ml','gr','mm','cm','m\xB2','m\xB3'];
+          unitsB.forEach(function(u){ h+='<option value="'+u+'"'+(u===(it.unit||'pz')?' selected':'')+'>'+u+'</option>'; });
+          h+='</select>';
+          h+='</div>';
+
+          h+='<div class="ord-gc-price ord-editable" onclick="ordInlineEdit(this,'+gi+','+ii+',\'price\')" title="Tap per modificare">';
+          if(prezzoManca && !hasSconto){
             h+='<span style="color:#fc8181;font-size:11px;font-weight:800;">— €?</span>';
+          } else if(hasSconto){
+            var savUnitB = (prezOrigNum - pu).toFixed(2);
+            h+='<div class="ct-old--orig">€'+prezOrigNum.toFixed(2)+'</div>';
+            h+='<div class="ct-sub--final">€'+pu.toFixed(2)+'</div>';
+            h+='<div style="font-size:8px;color:#f6ad55;text-align:center;">-€'+savUnitB+'</div>';
           } else {
             h+='€'+pu.toFixed(2);
           }
           h+='</div>';
+
           h+='<div class="ord-gc-sub">';
-          if(prezzoManca){
+          if(prezzoManca && !hasSconto){
             h+='<span style="color:#555;font-size:11px;">—</span>';
+          } else if(hasSconto){
+            var savTotB = ((prezOrigNum - pu) * q).toFixed(2);
+            h+='<div class="ct-old--orig">€'+(prezOrigNum*q).toFixed(2)+'</div>';
+            h+='<div class="ct-sub--final">€'+sub+'</div>';
+            h+='<div style="font-size:8px;color:#f6ad55;text-align:center;">-€'+savTotB+'</div>';
           } else {
             h+='€'+sub;
           }
-          h+='</div></div>';
+          h+='</div>';
+          h+='</div>';
+
+          var scOn2 = it.scampolo||it.fineRotolo||it._scaglionato||false;
+          var hasNota2 = !!(it.nota && it.nota.trim());
+          var sc2 = it._scontoApplicato||0;
+          var actClass = it._scaglionato ? 'ord-actions-scaglionato' : (it._tuttoRotolo||it.fineRotolo ? 'ord-actions-rotolo' : (it.scampolo ? 'ord-actions-scampolo' : ''));
+          h+='<div class="ord-item-actions '+ actClass +'" style="display:flex;gap:4px;align-items:center;padding:2px 8px;">';
+          var forbLbl2 = it._scaglionato?'SCAG':(it._tuttoRotolo?'ROT':(scOn2?(it.fineRotolo?'ROT':'SCA'):''));
+          var forbColor = it._scaglionato ? 'color:#63b3ed;border-color:#63b3ed44;background:#08082a;' : (scOn2||it._tuttoRotolo ? '' : '');
+          h+='<button class="ord-mini-btn'+(scOn2||it._tuttoRotolo?' ord-mini-on':'')+'" style="'+forbColor+'" onclick="ordToggleScampolo('+gi+','+ii+')" title="Scampolo/Rotolo/Scaglionato">';
+          h+='✂'+(forbLbl2?' '+forbLbl2:'')+'</button>';
+          if(scOn2||it._tuttoRotolo||it._scaglionato){
+            h+='<input type="number" min="0" max="100" value="'+(sc2||'')+'" placeholder="%" class="ord-mini-pct" onchange="ordSetSconto('+gi+','+ii+',this.value)" onclick="event.stopPropagation();this.select()">';
+            h+='<span style="font-size:9px;color:'+(it._scaglionato?'#63b3ed':'#68d391')+'">%</span>';
+          }
+          if(it._scaglionato){
+            h+='<span style="font-size:9px;color:#63b3ed;">da</span>';
+            h+='<input type="number" min="1" value="'+(it._scaglioneQta||10)+'" placeholder="qty" class="ord-mini-pct" style="color:#63b3ed;border-color:#63b3ed44;" onchange="ordSetScaglioneQta('+gi+','+ii+',this.value)" onclick="event.stopPropagation();this.select()">';
+            h+='<span style="font-size:9px;color:#63b3ed;">pz</span>';
+          }
+          h+='<button class="ord-mini-btn'+(hasNota2?' ord-mini-on':'')+'" onclick="ordEditNota('+gi+','+ii+')" title="Nota" style="margin-left:auto">📝</button>';
+          h+='<span class="ord-item-del" onclick="event.stopPropagation();ordDelItem(this,'+gi+','+ii+')" title="Rimuovi articolo">×</span>';
+          h+='</div>';
         });
         h+='</div>';
         h+='<div class="ord-total-bar">';
@@ -1450,6 +1547,7 @@ function openCassa(gi){
   fattoBtn.onclick=function(){
     var o=ordini.find(function(x){return x.id===_cassaOrdId;});
     if(o){
+      if(o.id && typeof ordUnlock === 'function') ordUnlock(o.id);
       o.stato='completato';
       if(!o.statiLog)o.statiLog={};
       o.statiLog.completato={ora:new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),data:new Date().toLocaleDateString('it-IT')};
@@ -2572,7 +2670,8 @@ function cancelEditProdotto(){
 // ── LOCK COLLABORATIVO — forza accesso con triplo tap ────────────
 function ordForceLock(ordId, gi){
   var ord = ordini[gi];
-  if(!ord){ console.error('[LOCK] ordForceLock — ordine non trovato a indice:', gi); return; }
+  if(!ord || ord.id !== ordId){ ord = ordini.find(function(x){ return x && x.id === ordId; }); }
+  if(!ord){ console.error('[LOCK] ordForceLock — ordine non trovato:', ordId); return; }
   var key = _lockKey(ordId);
   var currentLock = _ordLocks[key];
   var holderName = currentLock ? (currentLock.name || 'altro account') : 'altro account';
@@ -2582,17 +2681,25 @@ function ordForceLock(ordId, gi){
     return;
   }
   console.warn('[LOCK] ordForceLock — CONFERMATO, prendo il lock su:', ordId);
-  ordLock(ordId);
-  var chi = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.nome : 'Sconosciuto';
-  var ora = new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
-  if(!ord.modificheDiff) ord.modificheDiff = [];
-  ord.modificheDiff.unshift('⚠️ ' + ora + ' — Lock forzato da ' + chi + ' (era: ' + holderName + ')');
-  ord.modificato = true;
-  ord.modificatoAt = new Date().toLocaleString('it-IT');
-  ord.modificatoAtISO = new Date().toISOString();
-  saveOrdini();
-  showToastGen('orange','🔓 Lock forzato — ora lavori tu');
-  renderOrdini();
+  ordAcquireOrderLock(ordId, { force: true }, function(ok){
+    if(!ok){
+      showToastGen('red','❌ Impossibile aggiornare il lock su Firebase');
+      return;
+    }
+    var o = ordini.find(function(x){ return x && x.id === ordId; });
+    if(!o) return;
+    var chi = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.nome : 'Sconosciuto';
+    var ora = new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+    if(!o.modificheDiff) o.modificheDiff = [];
+    o.modificheDiff.unshift('⚠️ ' + ora + ' — Lock forzato da ' + chi + ' (era: ' + holderName + ')');
+    o.modificato = true;
+    o.modificatoAt = new Date().toLocaleString('it-IT');
+    o.modificatoAtISO = new Date().toISOString();
+    saveOrdini();
+    showToastGen('orange','🔓 Lock forzato — ora lavori tu');
+    if(typeof ordRefreshLockUI === 'function') ordRefreshLockUI();
+    else renderOrdini();
+  });
 }
 
 // ── DOPPIO TAP UNIVERSALE ORDINI (Safari iOS compatibile) ────────
@@ -2655,25 +2762,25 @@ function ordToggleScampolo(gi, ii){
   var ord=ordini[gi]; if(!ord||!ord.items[ii]) return;
   var it=ord.items[ii];
   if(!it.scampolo && !it.fineRotolo && !it._scaglionato){
-    // OFF -> Scampolo
-    if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
+    if(!ensurePrezzoOriginaleDaListino(it, true)){
+      showToastGen('orange','Listino non disponibile: collega l\'articolo al magazzino o imposta il prezzo');
+      return;
+    }
     it.scampolo=true; it.fineRotolo=false; it._scaglionato=false;
-    if(!it._scontoApplicato) it._scontoApplicato=30;
+    if(!it._scontoApplicato) it._scontoApplicato=SCONTO_SCAMPOLO_DEFAULT_PCT;
     it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-it._scontoApplicato/100)).toFixed(2);
   } else if(it.scampolo){
-    // Scampolo -> Rotolo
+    if(!ensurePrezzoOriginaleDaListino(it, true)) return;
     it.scampolo=false; it.fineRotolo=true; it._scaglionato=false;
     it._tuttoRotolo=true;
-    it._scontoApplicato=0;
-    if(it._prezzoOriginale) it.prezzoUnit=it._prezzoOriginale;
+    it._scontoApplicato=SCONTO_ROTOLO_DEFAULT_PCT;
+    it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-it._scontoApplicato/100)).toFixed(2);
   } else if(it.fineRotolo || it._tuttoRotolo){
-    // Rotolo -> Scaglionato
+    if(!ensurePrezzoOriginaleDaListino(it, true)) return;
     it.scampolo=false; it.fineRotolo=false; it._tuttoRotolo=false;
     it._scaglionato=true;
-    if(!it._scontoApplicato) it._scontoApplicato=5;
+    if(!it._scontoApplicato) it._scontoApplicato=SCONTO_SCAGLIONI_DEFAULT_PCT;
     if(!it._scaglioneQta) it._scaglioneQta=10;
-    // Applica sconto se qty >= soglia
-    if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
     var q=parseFloat(it.qty||0);
     if(q >= it._scaglioneQta){
       it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-it._scontoApplicato/100)).toFixed(2);
@@ -2681,7 +2788,6 @@ function ordToggleScampolo(gi, ii){
       it.prezzoUnit=it._prezzoOriginale;
     }
   } else {
-    // Scaglionato -> OFF: ripristina
     it.scampolo=false; it.fineRotolo=false; it._tuttoRotolo=false; it._scaglionato=false;
     if(it._prezzoOriginale) it.prezzoUnit=it._prezzoOriginale;
     delete it._prezzoOriginale;
@@ -2695,8 +2801,11 @@ function ordSetSconto(gi, ii, val){
   var ord=ordini[gi]; if(!ord||!ord.items[ii]) return;
   var it=ord.items[ii];
   var sc=parseFloat(val)||0;
+  if(!ensurePrezzoOriginaleDaListino(it, true)){
+    showToastGen('orange','Listino non disponibile');
+    return;
+  }
   it._scontoApplicato=sc;
-  if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
   if(it._scaglionato){
     var q=parseFloat(it.qty||0);
     var soglia=it._scaglioneQta||10;
@@ -2718,7 +2827,12 @@ function ordEditNota(gi, ii){
   var nota=prompt('Nota articolo:', ord.items[ii].nota||'');
   if(nota===null) return;
   ord.items[ii].nota=nota;
-  saveOrdini(); renderOrdini();
+  saveOrdini();
+  if(ord.stato === 'bozza'){
+    var cB = carrelli.find(function(x){ return x.bozzaOrdId === ord.id; });
+    if(cB){ cB.items = JSON.parse(JSON.stringify(ord.items)); saveCarrelli(); }
+  }
+  renderOrdini();
 }
 
 function ordSetNotaOrdine(gi, val){
@@ -2733,7 +2847,12 @@ function _ordRecalcSave(gi){
   ord.totale=tot.toFixed(2);
   ord.modificato=true;
   ord.modificatoAt=new Date().toLocaleString('it-IT');
-  saveOrdini(); renderOrdini();
+  saveOrdini();
+  if(ord.stato === 'bozza'){
+    var cB = carrelli.find(function(x){ return x.bozzaOrdId === ord.id; });
+    if(cB){ cB.items = JSON.parse(JSON.stringify(ord.items)); saveCarrelli(); }
+  }
+  renderOrdini();
 }
 
 // ── SBLOCCA/RIBLOCCA ordine completato per modifiche ─────────────
@@ -2745,7 +2864,12 @@ function ordSetUnit(gi, ii, val){
   ord.items[ii].unit=val;
   ord.modificato=true;
   ord.modificatoAt=new Date().toLocaleString('it-IT');
-  saveOrdini(); renderOrdini();
+  saveOrdini();
+  if(ord.stato === 'bozza'){
+    var cB = carrelli.find(function(x){ return x.bozzaOrdId === ord.id; });
+    if(cB){ cB.items = JSON.parse(JSON.stringify(ord.items)); saveCarrelli(); }
+  }
+  renderOrdini();
 }
 
 // ══ SCHEDA RAPIDA PRODOTTO — popup con foto, desc, posizione ════════════════
@@ -3071,7 +3195,10 @@ function ordSetScaglioneQta(gi, ii, val){
   var ord=ordini[gi]; if(!ord||!ord.items[ii]) return;
   var it=ord.items[ii];
   it._scaglioneQta = parseInt(val) || 10;
-  if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
+  if(!ensurePrezzoOriginaleDaListino(it, true)){
+    showToastGen('orange','Listino non disponibile');
+    return;
+  }
   var q = parseFloat(it.qty || 0);
   if(it._scontoApplicato > 0 && q >= it._scaglioneQta){
     it.prezzoUnit = (parsePriceIT(it._prezzoOriginale) * (1 - it._scontoApplicato/100)).toFixed(2);

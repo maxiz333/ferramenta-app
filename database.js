@@ -197,6 +197,64 @@ var lsSet=function(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){
 // [SECTION: UTILS] ---------------------------------------------------------
 /** Converte stringa prezzo italiana (es. "12,50") in float */
 function parsePriceIT(s){ return parseFloat(String(s||'0').replace(',','.'))||0; }
+
+// Sconti forbice: rotolo = % fissa sul listino (non azzerare)
+var SCONTO_ROTOLO_DEFAULT_PCT = 10;
+var SCONTO_SCAMPOLO_DEFAULT_PCT = 30;
+var SCONTO_SCAGLIONI_DEFAULT_PCT = 5;
+
+/** Prezzo listino (numerico): mai il prezzo già scontato se esiste _prezzoOriginale o rows[rowIdx] */
+function listinoPrezzoNum(it){
+  if(it._prezzoOriginale != null && String(it._prezzoOriginale).trim() !== ''){
+    var po = parsePriceIT(it._prezzoOriginale);
+    if(po > 0) return po;
+  }
+  if(it.rowIdx != null && it.rowIdx !== '' && typeof rows !== 'undefined' && rows && rows[it.rowIdx] != null){
+    var rn = parsePriceIT(rows[it.rowIdx].prezzo);
+    if(rn > 0) return rn;
+  }
+  var pu = parsePriceIT(it.prezzoUnit);
+  if(pu > 0) return pu;
+  return 0;
+}
+
+/** Stringa da salvare in _prezzoOriginale (formato listino) */
+function listinoPrezzoString(it){
+  if(it.rowIdx != null && it.rowIdx !== '' && typeof rows !== 'undefined' && rows && rows[it.rowIdx] != null){
+    var rp = rows[it.rowIdx].prezzo;
+    if(rp != null && String(rp).trim() !== '' && parsePriceIT(rp) > 0) return String(rp);
+  }
+  if(it._prezzoOriginale != null && String(it._prezzoOriginale).trim() !== '' && parsePriceIT(it._prezzoOriginale) > 0) return String(it._prezzoOriginale);
+  if(it.prezzoUnit != null && String(it.prezzoUnit).trim() !== '' && parsePriceIT(it.prezzoUnit) > 0) return String(it.prezzoUnit);
+  return '';
+}
+
+/**
+ * Garantisce _prezzoOriginale dal listino (rows → prezzoUnit). Non modifica rows[] / Firebase.
+ * @param fillPrezzoUnit se true e prezzoUnit è vuoto/0, lo imposta al listino.
+ */
+function ensurePrezzoOriginaleDaListino(it, fillPrezzoUnit){
+  var str = listinoPrezzoString(it);
+  if(!str) return false;
+  if(!it._prezzoOriginale || parsePriceIT(it._prezzoOriginale) <= 0) it._prezzoOriginale = str;
+  if(fillPrezzoUnit && (!it.prezzoUnit || parsePriceIT(it.prezzoUnit) <= 0)) it.prezzoUnit = str;
+  return true;
+}
+
+/** €/unità mostrato in totale riga ordine: usa prezzoUnit se valido, altrimenti listino + forbice */
+function ordItemLineUnitSelling(it){
+  var u = parsePriceIT(it.prezzoUnit);
+  if(u > 0) return u;
+  var p = listinoPrezzoNum(it);
+  if(p <= 0) return 0;
+  var sc = it._scontoApplicato || 0;
+  if((it.scampolo || it.fineRotolo) && sc > 0) return p * (1 - sc / 100);
+  if(it._scaglionato && sc > 0){
+    var q = parseFloat(it.qty || 0);
+    if(q >= (it._scaglioneQta || 10)) return p * (1 - sc / 100);
+  }
+  return p;
+}
 /** Legge e trimma il valore di un input per id */
 function gf(id){ var el=document.getElementById(id); return el?(el.value||'').trim():''; }
 var rows=[], removed=new Set(lsGet(RK,[])), cestino=lsGet(CK,[]);

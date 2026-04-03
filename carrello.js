@@ -26,6 +26,7 @@ function _applicaSconto(perc){
   if(!cart||!(cart.items||[]).length)return;
   cart.scontoGlobale=perc;
   (cart.items||[]).forEach(function(it){
+    ensurePrezzoOriginaleDaListino(it, true);
     it.scampolo=true;
     it._scontoApplicato=perc;
     it._scontoTipo='globale';
@@ -500,13 +501,11 @@ function cartSetUnit(cartId,idx,val){
   cart.items[idx].unit=val;saveCarrelli();renderCartTabs();
 }
 
-// Helper: calcola prezzo effettivo (con sconto scampolo/rotolo se attivo)
+// Helper: calcola prezzo effettivo (con sconto scampolo/rotolo se attivo) — base = listino
 function _prezzoEffettivo(it){
-  var p=parsePriceIT(it.prezzoUnit);
+  var p = listinoPrezzoNum(it);
   var sc=it._scontoApplicato||0;
-  // Scampolo/Rotolo: sconto diretto
   if((it.scampolo||it.fineRotolo) && sc>0) return p*(1-sc/100);
-  // Scaglionato: sconto solo se qty >= soglia
   if(it._scaglionato && sc>0){
     var q=parseFloat(it.qty||0);
     var soglia=it._scaglioneQta||10;
@@ -519,27 +518,32 @@ function cartCycleScampolo(cartId,idx){
   if(!cart||!cart.items[idx])return;
   var it=cart.items[idx];
   if(!it.scampolo && !it.fineRotolo && !it._tuttoRotolo && !it._scaglionato){
-    // OFF -> Scampolo
+    if(!ensurePrezzoOriginaleDaListino(it, true)){
+      showToastGen('orange','Listino non disponibile: imposta prezzo o cerca da magazzino');
+      return;
+    }
     it.scampolo=true; it.fineRotolo=false; it._tuttoRotolo=false; it._scaglionato=false;
     it._scontoTipo='scampolo';
-    if(!it._scontoApplicato) it._scontoApplicato=30;
+    if(!it._scontoApplicato) it._scontoApplicato=SCONTO_SCAMPOLO_DEFAULT_PCT;
   } else if(it.scampolo){
-    // Scampolo -> Rotolo
+    if(!ensurePrezzoOriginaleDaListino(it, true)) return;
     it.scampolo=false; it.fineRotolo=true; it._tuttoRotolo=true; it._scaglionato=false;
     it._scontoTipo='rotolo';
-    it._scontoApplicato=0;
+    it._scontoApplicato = SCONTO_ROTOLO_DEFAULT_PCT;
     it.nota='ROTOLO INTERO';
   } else if(it.fineRotolo || it._tuttoRotolo){
-    // Rotolo -> Scaglionato
+    if(!ensurePrezzoOriginaleDaListino(it, true)) return;
     it.scampolo=false; it.fineRotolo=false; it._tuttoRotolo=false; it._scaglionato=true;
     it._scontoTipo='scaglionato';
     if(it.nota==='ROTOLO INTERO') it.nota='';
-    if(!it._scontoApplicato) it._scontoApplicato=5;
+    if(!it._scontoApplicato) it._scontoApplicato=SCONTO_SCAGLIONI_DEFAULT_PCT;
     if(!it._scaglioneQta) it._scaglioneQta=10;
   } else {
-    // Scaglionato -> OFF
+    var restoreC = it._prezzoOriginale || listinoPrezzoString(it);
     it.scampolo=false; it.fineRotolo=false; it._tuttoRotolo=false; it._scaglionato=false;
     delete it._scontoTipo; delete it._scontoApplicato; delete it._scaglioneQta;
+    delete it._prezzoOriginale;
+    if(restoreC && parsePriceIT(restoreC) > 0) it.prezzoUnit = restoreC;
   }
   saveCarrelli();renderCartTabs();
 }
@@ -548,10 +552,21 @@ function cartSetScontoScampolo(cartId,idx,val){
   if(!cart||!cart.items[idx])return;
   var it=cart.items[idx];
   it._scontoApplicato=parseFloat(val)||0;
+  if(it.scampolo||it.fineRotolo||it._scaglionato){
+    ensurePrezzoOriginaleDaListino(it, true);
+  }
   saveCarrelli();renderCartTabs();
 }
 function _applicaScontoScampolo(it){
-  // NON USATA PIU — lo sconto si calcola al volo nel render
+  if(!ensurePrezzoOriginaleDaListino(it, true)) return;
+  var base = parsePriceIT(it._prezzoOriginale);
+  if(base <= 0) return;
+  var sc = it._scontoApplicato || 0;
+  if((it.scampolo || it.fineRotolo) && sc > 0){
+    it.prezzoUnit = (base * (1 - sc/100)).toFixed(2);
+  } else if(it.scampolo || it.fineRotolo){
+    it.prezzoUnit = it._prezzoOriginale;
+  }
 }
 function cartSetNota(cartId,idx,val){
   var cart=carrelli.find(function(c){return c.id===cartId;});
@@ -1040,7 +1055,7 @@ function renderCartTabs(){
 
     // ── CARD ARTICOLI ──────────────────────────────────────────────────────
     (cart.items||[]).forEach(function(it, idx){
-      var p            = parsePriceIT(it.prezzoUnit);
+      var p            = listinoPrezzoNum(it);
       var q            = parseFloat(it.qty) || 0;
       var isSc         = it.scampolo    || false;
       var isFR         = it.fineRotolo  || false;
@@ -1424,21 +1439,23 @@ function ctTuttoRotolo(cartId, idx){
   var it = cart.items[idx];
 
   if(it._tuttoRotolo){
-    // Disattiva
+    var restoreTr = it._prezzoOriginale || listinoPrezzoString(it);
     it._tuttoRotolo = false;
     if(it.nota === 'ROTOLO INTERO') it.nota = '';
     it.scampolo   = false;
     it.fineRotolo = false;
     delete it._scontoApplicato;
     delete it._scontoTipo;
+    delete it._prezzoOriginale;
+    if(restoreTr && parsePriceIT(restoreTr) > 0) it.prezzoUnit = restoreTr;
   } else {
-    // Attiva ROTOLO INTERO
+    ensurePrezzoOriginaleDaListino(it, true);
     it._tuttoRotolo     = true;
     it.nota             = 'ROTOLO INTERO';
     it.scampolo         = false;
     it.fineRotolo       = true;
     it._scontoTipo      = 'rotolo';
-    it._scontoApplicato = 0;
+    it._scontoApplicato = SCONTO_ROTOLO_DEFAULT_PCT;
   }
   saveCarrelli();
   renderCartTabs();
@@ -2069,18 +2086,20 @@ function inviaOrdine(cartId){
     items:(function(){
       var cpy=JSON.parse(JSON.stringify(cart.items));
       cpy.forEach(function(it){
-        var scOn=it.scampolo||it.fineRotolo;
+        ensurePrezzoOriginaleDaListino(it, true);
         var sc=it._scontoApplicato||0;
+        var base=parsePriceIT(it._prezzoOriginale);
+        if(base<=0) return;
+        var scOn=it.scampolo||it.fineRotolo;
         if(scOn&&sc>0){
-          if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
-          it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-sc/100)).toFixed(2);
+          it.prezzoUnit=(base*(1-sc/100)).toFixed(2);
         }
-        // Scaglionato: applica sconto se qty >= soglia
         if(it._scaglionato&&sc>0){
           var q=parseFloat(it.qty||0);
-          if(!it._prezzoOriginale) it._prezzoOriginale=it.prezzoUnit;
           if(q>=(it._scaglioneQta||10)){
-            it.prezzoUnit=(parsePriceIT(it._prezzoOriginale)*(1-sc/100)).toFixed(2);
+            it.prezzoUnit=(base*(1-sc/100)).toFixed(2);
+          } else {
+            it.prezzoUnit=it._prezzoOriginale;
           }
         }
       });

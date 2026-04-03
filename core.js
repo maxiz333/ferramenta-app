@@ -470,31 +470,122 @@ function loadMagazzinoFB(){
 
 
 // ══ LOCK COLLABORATIVO ORDINI ═══════════════════════════════════
-var LOCK_EXPIRE = 5 * 60 * 1000; // 5 minuti
+// Nodo Firebase: ordiniLocks/{sanitizedOrdId} = { by, name, at } (at = server timestamp)
+var LOCK_EXPIRE = 5 * 60 * 1000; // lock altrui considerato valido se più recente di 5 min
+var ORD_LOCKS_FB = 'ordiniLocks';
 var _ordLocks = {};
+var _ordLocksSnapshotJson = '';
+/** Dopo acquisizione lock (transaction): maschera solo se lo snapshot non mostra già un altro titolare */
+var _ordLockUiGrace = {};
+var LOCK_UI_GRACE_MS = 2500;
+/** Dopo forzatura: il listener può essere in ritardo — breve periodo in cui non mostriamo overlay al dispositivo che ha scritto */
+var _ordForceLockGrace = {};
+var LOCK_FORCE_GRACE_MS = 3000;
 var _deviceId = localStorage.getItem('cp4_deviceId') || ('dev_' + Date.now() + '_' + Math.random().toString(36).substr(2,6));
 localStorage.setItem('cp4_deviceId', _deviceId);
 var _deviceName = localStorage.getItem('cp4_deviceName') || _deviceId;
 
 function _lockKey(ordId){ return String(ordId).replace(/[.#$/\[\]]/g, '_'); }
 
-function ordLock(ordId){
-  if(!_fbReady || !_fbDb) return;
-  var key = _lockKey(ordId);
+function _ordLockPayload(){
   var lockBy = (_currentUser ? _currentUser.key : _deviceId);
   var lockName = (_currentUser ? _currentUser.nome : _deviceName);
-  var lock = { by: lockBy, name: lockName, at: Date.now() };
-  _ordLocks[key] = lock;
-  try{ _fbDb.ref('locks/' + key).set(lock); }catch(e){ console.error('ordLock err:', e); }
-  // Aggiorna anche il nodo accountBusy (lock per-account: segnala che questo account è occupato)
-  _accountBusySet(ordId);
+  return { by: lockBy, name: lockName, at: firebase.database.ServerValue.TIMESTAMP };
+}
+
+function _ordLockLocalCopy(){
+  var lockBy = (_currentUser ? _currentUser.key : _deviceId);
+  var lockName = (_currentUser ? _currentUser.nome : _deviceName);
+  return { by: lockBy, name: lockName, at: Date.now() };
+}
+
+/**
+ * Acquisisce il lock su Firebase (ordiniLocks). Non modifica rows/ordini[].
+ * @param force se true sovrascrive sempre (triplo tap). Se false = first-come: transaction, fallisce se lock fresco altrui.
+ * @param callback(ok) opzionale
+ */
+function ordAcquireOrderLock(ordId, options, callback){
+  if(typeof options === 'function'){ callback = options; options = {}; }
+  options = options || {};
+  var force = !!options.force;
+  var cb = typeof callback === 'function' ? callback : function(){};
+  var key = _lockKey(ordId);
+  var lockBy = (_currentUser ? _currentUser.key : _deviceId);
+  var refPath = ORD_LOCKS_FB + '/' + key;
+
+  function finish(ok, isForce){
+    if(ok){
+      if(isForce) _ordForceLockGrace[key] = Date.now() + LOCK_FORCE_GRACE_MS;
+      else _ordLockUiGrace[key] = Date.now() + LOCK_UI_GRACE_MS;
+      _accountBusySet(ordId);
+    }
+    cb(ok);
+  }
+
+  if(!_fbReady || !_fbDb){
+    if(force || !ordIsLockedByOther(ordId)){
+      _ordLocks[key] = _ordLockLocalCopy();
+      finish(true, !!force);
+    } else {
+      finish(false, false);
+    }
+    return;
+  }
+
+  var ref = _fbDb.ref(refPath);
+
+  if(force){
+    var pay = _ordLockPayload();
+    _ordLocks[key] = _ordLockLocalCopy();
+    ref.set(pay, function(err){
+      if(err){
+        console.error('[LOCK] ordAcquireOrderLock force err:', err);
+        delete _ordLocks[key];
+        finish(false, false);
+        return;
+      }
+      finish(true, true);
+    });
+    return;
+  }
+
+  ref.transaction(function(current){
+    var now = Date.now();
+    if(!current) return _ordLockPayload();
+    var at = current.at;
+    if(typeof at !== 'number' || isNaN(at) || (now - at) > LOCK_EXPIRE) return _ordLockPayload();
+    if(String(current.by) === String(lockBy)) return _ordLockPayload();
+    return undefined;
+  }, function(error, committed, snapshot){
+    if(error){
+      console.error('[LOCK] transaction err:', error);
+      finish(false, false);
+      return;
+    }
+    if(!committed){
+      finish(false, false);
+      return;
+    }
+    var v = snapshot.val();
+    if(v && typeof v.at === 'number') _ordLocks[key] = v;
+    else _ordLocks[key] = _ordLockLocalCopy();
+    finish(true, false);
+  });
+}
+
+/** @deprecated Usare ordAcquireOrderLock; mantenuto per compat: forza lock senza callback */
+function ordLock(ordId){
+  ordAcquireOrderLock(ordId, { force: true });
 }
 
 function ordUnlock(ordId){
   var key = _lockKey(ordId);
+  delete _ordLockUiGrace[key];
+  delete _ordForceLockGrace[key];
   delete _ordLocks[key];
-  if(_fbReady && _fbDb) try{ _fbDb.ref('locks/' + key).remove(); }catch(e){}
-  // Rilascia anche il lock per-account
+  if(_fbReady && _fbDb){
+    try{ _fbDb.ref(ORD_LOCKS_FB + '/' + key).remove(); }catch(e){}
+  }
   _accountBusyClear();
 }
 
@@ -551,24 +642,45 @@ function getAccountBusyWarning(ordId){
 function ordIsLockedByOther(ordId){
   var key = _lockKey(ordId);
   var lock = _ordLocks[key];
-  if(!lock) return false;
   var myId = (_currentUser ? _currentUser.key : _deviceId);
-  if(lock.by === myId) return false;
-  if(Date.now() - lock.at > LOCK_EXPIRE) return false;
+  var fg = _ordForceLockGrace[key];
+  if(fg && Date.now() < fg) return false;
+  var gu = _ordLockUiGrace[key];
+  if(gu && Date.now() < gu && (!lock || String(lock.by) === String(myId))) return false;
+  if(!lock) return false;
+  if(String(lock.by) === String(myId)) return false;
+  var at = lock.at;
+  if(typeof at !== 'number' || isNaN(at)) return false;
+  if(Date.now() - at > LOCK_EXPIRE) return false;
   return lock;
 }
 
 function _initLockListener(){
   if(!_fbReady || !_fbDb) return;
-  _fbDb.ref('locks').on('value', function(snap){
+  _fbDb.ref(ORD_LOCKS_FB).on('value', function(snap){
     var d = snap.val();
-    _ordLocks = d || {};
-    // NON re-renderizzare se c'è un editing inline attivo
+    var flat = d || {};
+    var js = JSON.stringify(flat);
+    if(js === _ordLocksSnapshotJson) return;
+    _ordLocksSnapshotJson = js;
+    _ordLocks = flat;
     if(document.querySelector('.ord-inline-input')) return;
     var t = document.getElementById('to');
     if(t && t.classList.contains('active')){
       try{ renderOrdini(); }catch(e){}
     }
+  });
+}
+
+/** Dopo forzatura lock: refresh UI subito (tab ordini attiva) */
+function ordRefreshLockUI(){
+  var t = document.getElementById('to');
+  if(t && t.classList.contains('active') && !document.querySelector('.ord-inline-input')){
+    try{ renderOrdini(); }catch(e){}
+  }
+  requestAnimationFrame(function(){
+    if(document.querySelector('.ord-inline-input')) return;
+    try{ if(typeof renderOrdini === 'function') renderOrdini(); }catch(e){}
   });
 }
 
@@ -1321,6 +1433,7 @@ function _cassaModeFatto(btn, gi){
   // Secondo tap — completa
   var ord = ordini[gi];
   if(ord){
+    if(ord.id && typeof ordUnlock === 'function') ordUnlock(ord.id);
     ord.stato = 'completato';
     if(!ord.statiLog) ord.statiLog = {};
     ord.statiLog.completato = {
