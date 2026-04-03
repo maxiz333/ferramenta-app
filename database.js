@@ -1895,82 +1895,65 @@ function searchHistory(){
 }
 
 // -- EDITOR CARTELLINI -------------------
-var editorSettings={
-  priceColor:'#000000',borderColor:'#aaaaaa',frameColor:'#aaaaaa',
-  smW:67,smH:38,lgW:94,lgH:39,barrato:false,
-  priceFontSm:26,priceFontLg:32,promoFont:6,oldPriceFont:10,borderWidth:0.5,
-  shape:'',frame:'',bg:'#ffffff',promoText:'PROMO'
-};
+var editorSettings={priceColor:'#000000',borderColor:'#aaaaaa',smW:67,smH:38,lgW:94,lgH:39,barrato:false,shape:'',frame:'',frameColor:'#aaaaaa',promoText:'PROMO',bg:'#ffffff'};
 
 function loadEditorSettings(){
   var s=lsGet('cp4_editor',null);
   if(s) editorSettings=Object.assign(editorSettings,s);
-
-  // Campi base
-  var el;
-  if((el=document.getElementById('ec-price-color')))  el.value=editorSettings.priceColor||'#000000';
-  if((el=document.getElementById('ec-border-color'))) el.value=editorSettings.borderColor||'#aaaaaa';
-  if((el=document.getElementById('ec-frame-color')))  el.value=editorSettings.frameColor||'#aaaaaa';
-  if((el=document.getElementById('ec-sm-w')))  el.value=editorSettings.smW||67;
-  if((el=document.getElementById('ec-sm-h')))  el.value=editorSettings.smH||38;
-  if((el=document.getElementById('ec-lg-w')))  el.value=editorSettings.lgW||94;
-  if((el=document.getElementById('ec-lg-h')))  el.value=editorSettings.lgH||39;
-  if((el=document.getElementById('ec-barrato'))) el.checked=!!editorSettings.barrato;
-
-  // Slider dimensioni testo
-  ec_setSlider('ec-price-font-sm',  'ec-price-font-sm-val',  editorSettings.priceFontSm||26,  'pt');
-  ec_setSlider('ec-price-font-lg',  'ec-price-font-lg-val',  editorSettings.priceFontLg||32,  'pt');
-  ec_setSlider('ec-promo-font',     'ec-promo-font-val',     editorSettings.promoFont||6,     'pt');
-  ec_setSlider('ec-oldprice-font',  'ec-oldprice-font-val',  editorSettings.oldPriceFont||10, 'pt');
-  ec_setSlider('ec-border-width',   'ec-border-width-val',   editorSettings.borderWidth||0.5, 'px');
-
-  // Forma attiva
-  ec_highlightShape(editorSettings.shape||'');
-  // Cornice attiva
-  ec_highlightFrame(editorSettings.frame||'');
-  // Sfondo attivo
-  ec_highlightBg(editorSettings.bg||'#ffffff');
-  // Testo promo
-  if((el=document.getElementById('ec-promo-text'))) el.value=editorSettings.promoText||'PROMO';
-  ec_highlightPromoBtn(editorSettings.promoText||'PROMO');
-}
-
-function ec_setSlider(sliderId, valId, value, unit){
-  var sl=document.getElementById(sliderId);
-  var vl=document.getElementById(valId);
-  if(sl) sl.value=value;
-  if(vl) vl.textContent=value+unit;
-}
-
-function ec_updateSliderVal(sliderId, valId, unit){
-  var sl=document.getElementById(sliderId);
-  var vl=document.getElementById(valId);
-  if(!sl||!vl) return;
-  vl.textContent=sl.value+unit;
-  applyEditor();
+  document.getElementById('ec-price-color').value=editorSettings.priceColor;
+  document.getElementById('ec-border-color').value=editorSettings.borderColor;
+  document.getElementById('ec-sm-w').value=editorSettings.smW;
+  document.getElementById('ec-sm-h').value=editorSettings.smH;
+  document.getElementById('ec-lg-w').value=editorSettings.lgW;
+  document.getElementById('ec-lg-h').value=editorSettings.lgH;
+  document.getElementById('ec-barrato').checked=editorSettings.barrato;
+  var fc=document.getElementById('ec-frame-color');
+  if(fc) fc.value=editorSettings.frameColor||'#aaaaaa';
+  var pt=document.getElementById('ec-promo-text');
+  if(pt) pt.value=editorSettings.promoText||'PROMO';
+  // Aggiorna stato bottoni shape
+  document.querySelectorAll('.ec-shape-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-shape')===(editorSettings.shape||''));
+  });
+  // Aggiorna stato bottoni frame
+  document.querySelectorAll('.ec-frame-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-frame')===(editorSettings.frame||''));
+  });
+  // Aggiorna stato bottoni promo text
+  document.querySelectorAll('.ec-promo-txt-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-val')===(editorSettings.promoText||'PROMO'));
+  });
+  // Aggiorna stato bottoni bg
+  document.querySelectorAll('.ec-bg-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-val')===(editorSettings.bg||'#ffffff'));
+  });
+  // Aggiorna slider font/border
+  var sliders=[
+    {id:'ec-price-font-sm',label:'ec-price-font-sm-val',unit:'pt',def:26},
+    {id:'ec-price-font-lg',label:'ec-price-font-lg-val',unit:'pt',def:32},
+    {id:'ec-promo-font',label:'ec-promo-font-val',unit:'pt',def:6},
+    {id:'ec-oldprice-font',label:'ec-oldprice-font-val',unit:'pt',def:10},
+    {id:'ec-border-width',label:'ec-border-width-val',unit:'px',def:0.5}
+  ];
+  sliders.forEach(function(sl){
+    var inp=document.getElementById(sl.id);
+    var lbl=document.getElementById(sl.label);
+    var val=editorSettings[sl.id]!==undefined?editorSettings[sl.id]:sl.def;
+    if(inp) inp.value=val;
+    if(lbl) lbl.textContent=val+sl.unit;
+  });
 }
 
 function applyEditor(){
-  // Leggi tutti i valori dai controlli
-  function gv(id,fallback){ var el=document.getElementById(id); return el?el.value:fallback; }
-  function gn(id,fallback){ var el=document.getElementById(id); return el?parseFloat(el.value)||fallback:fallback; }
-  function gb(id){ var el=document.getElementById(id); return el?el.checked:false; }
-
-  editorSettings.priceColor   = gv('ec-price-color','#000000');
-  editorSettings.borderColor  = gv('ec-border-color','#aaaaaa');
-  editorSettings.frameColor   = gv('ec-frame-color','#aaaaaa');
-  editorSettings.smW          = parseInt(gv('ec-sm-w','67'))||67;
-  editorSettings.smH          = parseInt(gv('ec-sm-h','38'))||38;
-  editorSettings.lgW          = parseInt(gv('ec-lg-w','94'))||94;
-  editorSettings.lgH          = parseInt(gv('ec-lg-h','39'))||39;
-  editorSettings.barrato      = gb('ec-barrato');
-  editorSettings.priceFontSm  = gn('ec-price-font-sm',26);
-  editorSettings.priceFontLg  = gn('ec-price-font-lg',32);
-  editorSettings.promoFont    = gn('ec-promo-font',6);
-  editorSettings.oldPriceFont = gn('ec-oldprice-font',10);
-  editorSettings.borderWidth  = gn('ec-border-width',0.5);
-  // shape, frame, bg, promoText sono settati direttamente dai bottoni
-
+  editorSettings.priceColor=document.getElementById('ec-price-color').value;
+  editorSettings.borderColor=document.getElementById('ec-border-color').value;
+  editorSettings.smW=parseInt(document.getElementById('ec-sm-w').value)||67;
+  editorSettings.smH=parseInt(document.getElementById('ec-sm-h').value)||38;
+  editorSettings.lgW=parseInt(document.getElementById('ec-lg-w').value)||94;
+  editorSettings.lgH=parseInt(document.getElementById('ec-lg-h').value)||39;
+  editorSettings.barrato=document.getElementById('ec-barrato').checked;
+  var fc=document.getElementById('ec-frame-color');
+  if(fc) editorSettings.frameColor=fc.value;
   lsSet('cp4_editor',editorSettings);
   applyEditorCSS();
   renderEditorPreview();
@@ -1980,83 +1963,110 @@ function applyEditor(){
 function applyEditorCSS(){
   var s=document.getElementById('editor-style');
   if(!s){s=document.createElement('style');s.id='editor-style';document.head.appendChild(s);}
-  var smW=editorSettings.smW||67, smH=editorSettings.smH||38;
-  var lgW=editorSettings.lgW||94, lgH=editorSettings.lgH||39;
+  var smW=editorSettings.smW, smH=editorSettings.smH;
+  var lgW=editorSettings.lgW, lgH=editorSettings.lgH;
   var smRatio=(smW/smH).toFixed(4);
   var lgRatio=(lgW/lgH).toFixed(4);
-  var bc=editorSettings.borderColor||'#aaaaaa';
-  var fc=editorSettings.frameColor||bc;
-  var bg=editorSettings.bg||'#ffffff';
-  var bw=(editorSettings.borderWidth||0.5)+'px';
-  var pfsm=(editorSettings.priceFontSm||26)+'pt';
-  var pflg=(editorSettings.priceFontLg||32)+'pt';
-  var pf=(editorSettings.promoFont||6)+'pt';
-  var opf=(editorSettings.oldPriceFont||10)+'pt';
   var shape=editorSettings.shape||'';
   var frame=editorSettings.frame||'';
+  var fCol=editorSettings.frameColor||editorSettings.borderColor||'#aaaaaa';
   var promoTxt=editorSettings.promoText||'PROMO';
+  var bg=editorSettings.bg||'#ffffff';
+  // Slider values
+  var priceFontSm=editorSettings['ec-price-font-sm']||26;
+  var priceFontLg=editorSettings['ec-price-font-lg']||32;
+  var promoFont=editorSettings['ec-promo-font']||6;
+  var oldPriceFont=editorSettings['ec-oldprice-font']||10;
+  var borderW=editorSettings['ec-border-width']!=null?editorSettings['ec-border-width']:0.5;
 
-  // Forma: border-radius
-  var shapeCSS='';
-  if(shape==='rounded') shapeCSS='border-radius:4mm!important;';
-  else if(shape==='pill') shapeCSS='border-radius:12mm!important;';
-  else if(shape==='ticket') shapeCSS='border-radius:2mm!important;clip-path:polygon(0 0,100% 0,100% 100%,0 100%,3mm 50%)!important;';
+  var css='';
+  // Bordo, colore prezzo, sfondo, spessore bordo
+  css+='.tag-small,.tag-large{border:'+borderW+'px solid '+editorSettings.borderColor+'!important;background:'+bg+'!important;}';
+  css+='.tpr{color:'+editorSettings.priceColor+'!important;}';
+  // Font sizes da slider
+  css+='.tag-small .tpr{font-size:'+priceFontSm+'pt!important;}';
+  css+='.tag-large .tpr{font-size:'+priceFontLg+'pt!important;}';
+  css+='.top2{font-size:'+oldPriceFont+'pt!important;}';
+  // Dimensioni
+  css+='.tag-small{width:'+smW+'mm!important;height:'+smH+'mm!important;aspect-ratio:'+smRatio+'!important;}';
+  css+='.tag-large{width:'+lgW+'mm!important;height:'+lgH+'mm!important;aspect-ratio:'+lgRatio+'!important;}';
+  // Prezzo centrato
+  css+='.tpa{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:.5mm;padding:0 2mm;}';
+  css+='.tpr{display:block;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}';
 
-  // Cornice
-  var frameCSS='';
-  if(frame==='double') frameCSS='outline:1px solid '+fc+'!important;outline-offset:-2.5mm!important;';
-  else if(frame==='dotted') frameCSS='outline:1.5px dotted '+fc+'!important;outline-offset:-2mm!important;';
-  else if(frame==='elegant') frameCSS='outline:0.8px solid '+fc+'!important;outline-offset:-2mm!important;box-shadow:inset 0 0 0 1mm #fff,inset 0 0 0 1.4mm '+fc+'!important;';
-  else if(frame==='deco') frameCSS='outline:1.2px solid '+fc+'!important;outline-offset:-1.8mm!important;';
+  // ── Forma ──
+  css+='.tag-small,.tag-large{border-radius:0!important;clip-path:none!important;}';
+  if(shape==='rounded'){
+    css+='.tag-small,.tag-large{border-radius:4mm!important;}';
+  } else if(shape==='pill'){
+    css+='.tag-small,.tag-large{border-radius:12mm!important;padding-left:5mm!important;padding-right:5mm!important;}';
+  } else if(shape==='ticket'){
+    // Ticket: punta a sinistra — NO clip-path, usa SVG-like via bordo + inset
+    // Metodo: nascondi overflow, aggiungi padding sinistro, disegna la punta con ::after
+    css+='.tag-small,.tag-large{border-left:none!important;border-radius:0 2mm 2mm 0!important;padding-left:6mm!important;position:relative!important;}';
+    css+='.tag-small::after,.tag-large::after{content:"";position:absolute;left:0;top:0;width:0;height:0;border-style:solid;border-color:transparent '+editorSettings.borderColor+' transparent transparent;z-index:5;pointer-events:none;}';
+    css+='.tag-small::after{border-width:'+((smH/2))+'mm 3.5mm '+((smH/2))+'mm 0;}';
+    css+='.tag-large::after{border-width:'+((lgH/2))+'mm 3.5mm '+((lgH/2))+'mm 0;}';
+  }
 
-  // Nastro promo: aggiorna testo via CSS content
-  var promoContent=JSON.stringify(promoTxt||'PROMO');
+  // ── Cornice ──
+  if(frame==='double'){
+    css+='.tag-small,.tag-large{outline:1px solid '+fCol+';outline-offset:-2.5mm;}';
+  } else if(frame==='dotted'){
+    css+='.tag-small,.tag-large{outline:1.5px dotted '+fCol+';outline-offset:-2mm;}';
+  } else if(frame==='elegant'){
+    css+='.tag-small,.tag-large{outline:0.8px solid '+fCol+';outline-offset:-2mm;box-shadow:inset 0 0 0 1mm '+bg+',inset 0 0 0 1.4mm '+fCol+';}';
+  } else if(frame==='deco'){
+    css+='.tag-small,.tag-large{outline:1.2px solid '+fCol+';outline-offset:-1.8mm;}';
+  }
 
-  s.textContent=
-    // Dimensioni e sfondo
-    '.tag-small{width:'+smW+'mm!important;height:'+smH+'mm!important;aspect-ratio:'+smRatio+'!important;border:'+bw+' solid '+bc+'!important;background:'+bg+'!important;'+shapeCSS+frameCSS+'}'+
-    '.tag-large{width:'+lgW+'mm!important;height:'+lgH+'mm!important;aspect-ratio:'+lgRatio+'!important;border:'+bw+' solid '+bc+'!important;background:'+bg+'!important;'+shapeCSS+frameCSS+'}'+
-    // Colore prezzo + dimensione
-    '.tag-small .tpr{color:'+editorSettings.priceColor+'!important;font-size:'+pfsm+'!important;}'+
-    '.tag-large .tpr{color:'+editorSettings.priceColor+'!important;font-size:'+pflg+'!important;}'+
-    // Prezzo barrato
-    '.tag-small .top2,.tag-large .top2{font-size:'+opf+'!important;}'+
-    // Nastro promo: dimensione testo
-    '.tag-small.cp::before{font-size:'+pf+'!important;content:'+promoContent+'!important;}'+
-    '.tag-large.cp::before{font-size:'+pf+'!important;content:'+promoContent+'!important;}'+
-    // Layout interno
-    '.tpa{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:.5mm;padding:0 2mm;}'+
-    '.tpr{display:block;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'+
-    // Stampa
-    '@media print{'+
-      '.tag-small{width:'+smW+'mm!important;height:'+smH+'mm!important;max-width:'+smW+'mm!important;max-height:'+smH+'mm!important;}'+
-      '.tag-large{width:'+lgW+'mm!important;height:'+lgH+'mm!important;max-width:'+lgW+'mm!important;max-height:'+lgH+'mm!important;}'+
-    '}';
+  // ── Ribbon PROMO — resta dentro il tag (overflow:hidden) ──
+  // Il ribbon è ruotato a 35deg nell'angolo in alto a destra.
+  // Più il font cresce, più il ribbon è alto → serve più spazio diagonale.
+  // Calcoliamo width e posizione per restare sempre nel rettangolo.
+  var txtLen=promoTxt.length;
+  var smPromoFont= promoFont;
+  var lgPromoFont= promoFont+1;
+  // Padding verticale del ribbon proporzionale al font
+  var ribbonPad = Math.max(0.8, promoFont * 0.18);
+  // Larghezza ribbon: deve coprire la diagonale — più larga con font grandi
+  // e con testi lunghi, ma limitata alla diagonale del tag
+  var smDiag = Math.sqrt(smW*smW + smH*smH);
+  var lgDiag = Math.sqrt(lgW*lgW + lgH*lgH);
+  var smRibbonW = Math.min(smDiag * 0.55, Math.max(20, txtLen * promoFont * 0.5));
+  var lgRibbonW = Math.min(lgDiag * 0.55, Math.max(24, txtLen * (promoFont+1) * 0.5));
+  // Right offset: centra il testo sulla diagonale, si sposta verso dentro con font grandi
+  var smRight = -(smRibbonW * 0.22) + (promoFont - 6) * 0.3;
+  var lgRight = -(lgRibbonW * 0.22) + (promoFont - 6) * 0.3;
+  // Top: scende un po' con font grandi per restare dentro
+  var smTop = Math.max(1, 5 - (promoFont - 6) * 0.5);
+  var lgTop = Math.max(1.5, 5.5 - (promoFont - 6) * 0.5);
+
+  css+='.tag-small.cp::before,.tag-large.cp::before{content:"'+promoTxt.replace(/"/g,'\\"')+'"!important;padding:'+ribbonPad.toFixed(1)+'mm 0!important;}';
+  css+='.tag-small.cp::before{font-size:'+smPromoFont+'pt!important;width:'+smRibbonW.toFixed(1)+'mm!important;right:'+smRight.toFixed(1)+'mm!important;top:'+smTop.toFixed(1)+'mm!important;}';
+  css+='.tag-large.cp::before{font-size:'+lgPromoFont+'pt!important;width:'+lgRibbonW.toFixed(1)+'mm!important;right:'+lgRight.toFixed(1)+'mm!important;top:'+lgTop.toFixed(1)+'mm!important;}';
+
+  // Stampa
+  css+='@media print{';
+  css+='.tag-small{width:'+smW+'mm!important;height:'+smH+'mm!important;max-width:'+smW+'mm!important;max-height:'+smH+'mm!important;}';
+  css+='.tag-large{width:'+lgW+'mm!important;height:'+lgH+'mm!important;max-width:'+lgW+'mm!important;max-height:'+lgH+'mm!important;}';
+  css+='}';
+
+  s.textContent=css;
 }
 
 function renderEditorPreview(){
   var prev=document.getElementById('ec-preview');
   if(!prev) return;
   var sample=[
-    {data:'09-03-2026',desc:'Esempio Articolo',codF:'00020-13/8',codM:'0329013',prezzoOld:'5,00',prezzo:'3,20',barrato:editorSettings.barrato?'si':'no',promo:'si',giornalino:'rosso',size:'small',note:''},
-    {data:'09-03-2026',desc:'Articolo Grande',codF:'04170-14/3',codM:'0308114',prezzoOld:'',prezzo:'139,00',barrato:'no',promo:'no',giornalino:'',size:'large',note:''}
+    {data:'09-03-2026',desc:'Esempio Articolo',codF:'00020-13/8',codM:'0329013',prezzoOld:'5,00',prezzo:'3,20',barrato:editorSettings.barrato?'si':'no',promo:'si',size:'small',note:'',giornalino:'rosso'},
+    {data:'09-03-2026',desc:'Articolo Grande',codF:'04170-14/3',codM:'0308114',prezzoOld:'',prezzo:'139,00',barrato:'no',promo:'no',size:'large',note:''}
   ];
-  // Usa makeTag direttamente senza filtro removed[]
-  var sm=sample.filter(function(r){return r.size==='small';});
-  var lg=sample.filter(function(r){return r.size==='large';});
-  var h='';
-  for(var i=0;i<sm.length;i+=3) h+='<div class="tag-row">'+sm.slice(i,i+3).map(function(r){return makeTag(r,undefined);}).join('')+'</div>';
-  for(var i=0;i<lg.length;i+=2) h+='<div class="tag-row">'+lg.slice(i,i+2).map(function(r){return makeTag(r,undefined);}).join('')+'</div>';
-  prev.innerHTML=h;
+  prev.innerHTML=buildTagsHTML(sample);
 }
 
 function resetEditor(){
-  editorSettings={
-    priceColor:'#000000',borderColor:'#aaaaaa',frameColor:'#aaaaaa',
-    smW:67,smH:38,lgW:94,lgH:39,barrato:false,
-    priceFontSm:26,priceFontLg:32,promoFont:6,oldPriceFont:10,borderWidth:0.5,
-    shape:'',frame:'',bg:'#ffffff',promoText:'PROMO'
-  };
+  editorSettings={priceColor:'#000000',borderColor:'#aaaaaa',smW:67,smH:38,lgW:94,lgH:39,barrato:false,shape:'',frame:'',frameColor:'#aaaaaa',promoText:'PROMO',bg:'#ffffff'};
   lsSet('cp4_editor',editorSettings);
   loadEditorSettings();
   applyEditorCSS();
@@ -2064,73 +2074,65 @@ function resetEditor(){
   genTags();
 }
 
-// ── Funzioni per i bottoni forma / cornice / sfondo / testo promo ──────────
-
-function ec_setShape(shape){
-  editorSettings.shape=shape;
-  lsSet('cp4_editor',editorSettings);
-  ec_highlightShape(shape);
-  applyEditorCSS();
-  renderEditorPreview();
-}
-function ec_highlightShape(shape){
+// ── Funzioni editor: Forma, Cornice, Testo Promo, Sfondo ────────────
+function ec_setShape(val){
+  editorSettings.shape=val;
   document.querySelectorAll('.ec-shape-btn').forEach(function(b){
-    var active=(b.getAttribute('data-shape')===shape);
-    b.style.borderColor=active?'var(--accent)':'var(--border)';
-    b.style.color=active?'var(--accent)':'#ccc';
-    b.style.background=active?'rgba(245,196,0,.12)':'transparent';
+    b.classList.toggle('active', b.getAttribute('data-shape')===val);
   });
-}
-
-function ec_setFrame(frame){
-  editorSettings.frame=frame;
   lsSet('cp4_editor',editorSettings);
-  ec_highlightFrame(frame);
   applyEditorCSS();
   renderEditorPreview();
+  genTags();
 }
-function ec_highlightFrame(frame){
+
+function ec_setFrame(val){
+  editorSettings.frame=val;
   document.querySelectorAll('.ec-frame-btn').forEach(function(b){
-    var active=(b.getAttribute('data-frame')===frame);
-    b.style.borderColor=active?'var(--accent)':'var(--border)';
-    b.style.color=active?'var(--accent)':'#ccc';
-    b.style.background=active?'rgba(245,196,0,.12)':'transparent';
+    b.classList.toggle('active', b.getAttribute('data-frame')===val);
   });
-}
-
-function ec_setBg(color){
-  editorSettings.bg=color;
   lsSet('cp4_editor',editorSettings);
-  ec_highlightBg(color);
   applyEditorCSS();
   renderEditorPreview();
-}
-function ec_highlightBg(color){
-  document.querySelectorAll('.ec-bg-btn').forEach(function(b){
-    // confronta normalizzando il colore
-    var active=(b.getAttribute('data-val')===color);
-    b.style.borderColor=active?'var(--accent)':'var(--border)';
-    b.style.borderWidth=active?'3px':'2px';
-    b.style.transform=active?'scale(1.15)':'scale(1)';
-  });
+  genTags();
 }
 
-function ec_setPromoText(txt){
-  editorSettings.promoText=txt||'PROMO';
-  lsSet('cp4_editor',editorSettings);
+function ec_setPromoText(val){
+  editorSettings.promoText=val||'PROMO';
   var inp=document.getElementById('ec-promo-text');
-  if(inp && inp.value!==txt) inp.value=txt;
-  ec_highlightPromoBtn(txt);
+  if(inp && inp.value!==val) inp.value=val;
+  document.querySelectorAll('.ec-promo-txt-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-val')===val);
+  });
+  lsSet('cp4_editor',editorSettings);
   applyEditorCSS();
   renderEditorPreview();
+  genTags();
 }
-function ec_highlightPromoBtn(txt){
-  document.querySelectorAll('.ec-promo-txt-btn').forEach(function(b){
-    var active=(b.getAttribute('data-val')===txt);
-    b.style.borderColor=active?'#e53e3e':'var(--border)';
-    b.style.background=active?'rgba(229,62,62,.15)':'transparent';
-    b.style.color=active?'#fc8181':'#888';
+
+function ec_setBg(val){
+  editorSettings.bg=val||'#ffffff';
+  document.querySelectorAll('.ec-bg-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-val')===val);
   });
+  lsSet('cp4_editor',editorSettings);
+  applyEditorCSS();
+  renderEditorPreview();
+  genTags();
+}
+
+// ── Slider font size / border width ─────────────────────────────────
+function ec_updateSliderVal(sliderId, labelId, unit){
+  var slider=document.getElementById(sliderId);
+  var label=document.getElementById(labelId);
+  if(!slider||!label) return;
+  label.textContent=slider.value+unit;
+  // Salva nei settings
+  editorSettings[sliderId]=parseFloat(slider.value);
+  lsSet('cp4_editor',editorSettings);
+  applyEditorCSS();
+  renderEditorPreview();
+  genTags();
 }
 
 // resetAI rimossa - stub vuoto non pi- necessario

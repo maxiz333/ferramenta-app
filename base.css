@@ -140,7 +140,8 @@ select{padding:3px 4px;border:1px solid var(--border);border-radius:3px;font-siz
 .tag-frame-deco{outline:1.2px solid var(--frame-color,#aaa);outline-offset:-1.8mm;}
 .tag-frame-deco::after{content:'';position:absolute;inset:2.5mm;border:0.4px solid var(--frame-color,#aaa);pointer-events:none;}
 /* Editor shape/frame buttons */
-.ec-shape-btn.active,.ec-frame-btn.active{border-color:var(--accent)!important;color:var(--accent)!important;background:rgba(30,58,95,.15)!important;}
+.ec-shape-btn.active,.ec-frame-btn.active,.ec-promo-txt-btn.active{border-color:var(--accent)!important;color:var(--accent)!important;background:rgba(30,58,95,.15)!important;}
+.ec-bg-btn.active{border-color:var(--accent)!important;outline:2px solid var(--accent);outline-offset:1px;}
 @media(max-width:600px){
   body{padding:6px;padding-bottom:30px;}
   .tabs{gap:3px;}

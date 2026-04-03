@@ -907,24 +907,10 @@ function renderOrdini(){
 
       // Calcolo ruolo/permessi PRIMA degli overlay (usati subito sotto)
       var _myKey = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.key : null;
-      var _myRuolo = (typeof _currentUser !== 'undefined' && _currentUser) ? _currentUser.ruolo : 'proprietario';
-      var _ordCommesso = ord.commesso || null;
-      var _altruiOrdine = (_myRuolo !== 'proprietario' && _ordCommesso && _ordCommesso !== _myKey);
-      // Non editabile se: completato, ordine altrui, o bloccato da un altro account
-      var _canEdit = !(isCompleted && !unlocked) && !_altruiOrdine && !lockInfo;
+      // Editabile se: non completato (o sbloccato) e non locked da un altro
+      var _canEdit = !(isCompleted && !unlocked) && !lockInfo;
 
       h+='<div class="ord-card'+(isCompleted&&!unlocked?' ord-card--done':'') + (_isExBozza&&ost==='nuovo'?' ord-card--exbozza':'')+'" style="border-top:4px solid '+sc+';position:relative;">';
-
-      // OVERLAY ACCOUNT - ordine di un altro commesso (solo proprietario può toccare)
-      if(_altruiOrdine && !lockInfo){
-        h+='<div class="ord-lock-overlay" onclick="ordDblTap(this,\'force\',\''+ord.id+'\','+gi+')">';
-        h+='<div class="ord-lock-msg">';
-        h+='<div style="font-size:24px;margin-bottom:6px">🔐</div>';
-        var _ordNomeCommesso = (typeof _roles !== 'undefined' && _roles[_ordCommesso]) ? _roles[_ordCommesso].nome : (_ordCommesso || 'altro account');
-        h+='<div style="font-size:14px;font-weight:800">ORDINE DI '+esc(_ordNomeCommesso).toUpperCase()+'</div>';
-        h+='<div style="font-size:10px;margin-top:8px;color:#666">Solo il proprietario può modificarlo</div>';
-        h+='</div></div>';
-      }
 
       // OVERLAY LOCK - se un altro dispositivo sta lavorando
       if(lockInfo){
@@ -975,7 +961,7 @@ function renderOrdini(){
       h+='<div class="ord-gh ord-gh-c">Tot</div>';
       h+='</div>';
 
-      // _myKey, _myRuolo, _ordCommesso, _altruiOrdine, _canEdit — già calcolati sopra
+      // _myKey, _canEdit — già calcolati sopra
 
       (ord.items||[]).forEach(function(it,ii){
         var pu=parsePriceIT(it.prezzoUnit);
