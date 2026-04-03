@@ -239,7 +239,6 @@ function ordInlineEdit(el, gi, ii, field){
     showToastGen('orange','🔒 ' + (lockInfo.name||'Altro account') + ' sta modificando questo ordine');
     return;
   }
-  ordLock(ord.id);
   el._editing = true;
   var it = ord.items[ii];
   var oldVal = '';
@@ -248,10 +247,14 @@ function ordInlineEdit(el, gi, ii, field){
   else if(field === 'price'){ oldVal = it.prezzoUnit || ''; inputType = 'text'; }
   else if(field === 'codF'){ oldVal = it.codF || ''; }
 
-  // Salva HTML originale per ripristino
+  // Inserisce l'input nel DOM PRIMA di acquisire il lock su Firebase
+  // così quando il listener Firebase triggera renderOrdini(),
+  // il check document.querySelector('.ord-inline-input') funziona correttamente
   var origHTML = el.innerHTML;
   el.innerHTML = '<input type="'+inputType+'" value="'+oldVal+'" class="ord-inline-input"'+(field==='qty'?' min="0.5" step="0.5"':'')+'>';
   var inp = el.querySelector('input');
+  // Acquisisce il lock DOPO aver messo l'input nel DOM (evita race condition Firebase)
+  ordLock(ord.id);
   setTimeout(function(){ inp.focus(); inp.select(); }, 50);
 
   function save(){
