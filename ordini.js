@@ -1050,6 +1050,10 @@ function renderOrdini(){
           h+='<button onclick="setStatoOrdine('+gi+',\'nuovo\')" class="ord-abtn ord-abtn--reopen">↩️ Riapri</button>';
         }
         h+='<button onclick="openCassa('+gi+')" class="ord-abtn ord-abtn--cassa">💰 Cassa</button>';
+        // ── Bottone Modifica esplicito per ex-bozze (viola) e bozze ──
+        if((_isExBozza || _isBozza) && _canEdit){
+          h+='<button onclick="modificaOrdineDaTab('+gi+')" class="ord-abtn ord-abtn--edit" style="background:rgba(128,90,213,.2);border:1px solid #805ad5;color:#b794f4;">✏️ Modifica</button>';
+        }
         h+='</div>';
         h+='<div class="ord-actions ord-actions-sec">';
         h+='<button onclick="ordStampaDblTap(this,'+gi+')" class="ord-abtn ord-abtn--print">🖨️ Stampa</button>';
